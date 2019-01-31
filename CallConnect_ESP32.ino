@@ -1,3 +1,11 @@
+/*
+ * Project: CallConnect_ESP32
+ * Description: Uses a button to change NeoPixel animation and publish a message.
+ * Author: John B Damask
+ * Date: January 30, 2019
+ * Notes: Good first pass. Issues with NeoPixels
+ */
+
 #include "WiFiManager.h" // https://github.com/tzapu/WiFiManager
 #include "AWS_IOT.h"
 #include "Adafruit_NeoPixel.h"
@@ -6,6 +14,7 @@ using namespace ace_button;
 
 /* Pins -----*/
 #define PIN_SOFTAP    13    // Button pin for reconfiguring WiFiManager
+#define PIN_STATE     27    // Button pin for changing state
 #define PIN_NEOPIXEL   12    // pin connected to the small NeoPixels strip
 
 /* AWS IOT -----*/
@@ -36,46 +45,61 @@ bool isOff = true;  // NeoPixel on/off toggle
 
 /* States (1,2,3) ---*/
 uint8_t state = 0, previousState = 0;
-unsigned long lastUpdate = 0;
+unsigned long lastUpdate = 0, idleTimer = 0; // for millis() when last update occurred
 
 /* Timing stuff -----*/
 long countDown = 0;  // Counts down a certain number of seconds before taking action (for certain states)
+#define IDLE_TIMEOUT    5000   // Milliseconds that there can be no touch or ble input before reverting to idle state
 
 /* WiFi -----*/
 WiFiManager wm; // global wm instance
 bool res;       // Boolean letting us know if we can connect to saved WiFi
 
 /* Button stuff -----*/
-AceButton button(PIN_SOFTAP);
-void handleEvent(AceButton*, uint8_t, uint8_t);
+AceButton buttonState(PIN_STATE);
+AceButton buttonAP(PIN_SOFTAP);
+void handleStateEvent(AceButton*, uint8_t, uint8_t); // function prototype for state button
+void handleAPEvent(AceButton*, uint8_t, uint8_t); // function prototype for access point button
 bool isTouched = false;
 bool previouslyTouched = false;
-void handleEvent(AceButton*, uint8_t, uint8_t); // function prototype
+bool makingCall = false;    // Keep track of who calls and who receives
 
-/* MQTT callback ----*/
-void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad)
-{
-    strncpy(rcvdPayload,payLoad,payloadLen);
-    rcvdPayload[payloadLen] = 0;
-    msgReceived = 1;
-}
+
 
 void setup() {
     WiFi.disconnect(true);
+    delay(5000);
     Serial.begin(115200);
     Serial.println("\n Starting");
-    pinMode(PIN_SOFTAP, INPUT_PULLUP);
+
+  // Configs for the buttons. Need Released event to change the state,
+  // and LongPressed to go into SoftAP mode. Don't need Clicked.
+    ButtonConfig* buttonAPConfig = ButtonConfig::getSystemButtonConfig();
+    buttonAPConfig->setEventHandler(handleAPEvent);
+    buttonAPConfig->setFeature(ButtonConfig::kFeatureLongPress);
+    buttonAPConfig->setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);
+   
+    ButtonConfig* buttonStateConfig = ButtonConfig::getSystemButtonConfig();     
+    buttonStateConfig->setEventHandler(handleStateEvent);
+    buttonStateConfig->setFeature(ButtonConfig::kFeatureClick);
+    buttonStateConfig->setFeature(ButtonConfig::kFeatureRepeatPress);
+    // These suppressions not really necessary but cleaner.
+    buttonStateConfig->setFeature(ButtonConfig::kFeatureSuppressAfterClick);
+    buttonStateConfig->setFeature(ButtonConfig::kFeatureSuppressAfterRepeatPress);    
+
+    pinMode(PIN_SOFTAP, INPUT_PULLUP);    // Use built in pullup resistor
+    pinMode(PIN_STATE, INPUT_PULLUP);     // Use built in pullup resistor
 
     // Configure the ButtonConfig with the event handler, and enable all higher
     // level events.
-    ButtonConfig* buttonConfig = button.getButtonConfig();
-    buttonConfig->setEventHandler(handleEvent);
-    buttonConfig->setFeature(ButtonConfig::kFeatureDoubleClick);
-    buttonConfig->setFeature(ButtonConfig::kFeatureSuppressClickBeforeDoubleClick);
-    buttonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterClick);
-    buttonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterDoubleClick);
-    buttonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);
-    buttonConfig->setFeature(ButtonConfig::kFeatureLongPress);
+    // ButtonConfig* buttonConfig = buttonAP.getButtonConfig();
+    // buttonConfig->setEventHandler(handleEvent);
+    // buttonConfig->setFeature(ButtonConfig::kFeatureDoubleClick);
+    // buttonConfig->setFeature(ButtonConfig::kFeatureSuppressClickBeforeDoubleClick);
+    // buttonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterClick);
+    // buttonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterDoubleClick);
+    // buttonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);
+    // buttonConfig->setFeature(ButtonConfig::kFeatureLongPress);
 
     // Initialize NeoPixels
     strip.begin(); // This initializes the NeoPixel library.
@@ -86,8 +110,6 @@ void setup() {
     // Initiatize WiFiManager
     res = wm.autoConnect("AutoConnectAP","password"); // password protected ap
     wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
-
-    
 
     // Seeing if we can re-connect to known WiFi
     if(!res) {
@@ -100,10 +122,23 @@ void setup() {
         Serial.println("connected to wifi :)");
     }
 
+    // If connected to WiFi, then connect to AWS 
+    // if(hornbill.connect(HOST_ADDRESS,CLIENT_ID)== 0) {
+    //     Serial.println("Connected to AWS, bru");
+    //     delay(1000);
+    // } else {
+    //     Serial.println("AWS connection failed, Check the HOST Address");
+    //     while(1);
+    // } 
+    awsConnect();
+    mqttTopicSubscribe();
 }
 
 void loop(){
-  button.check();
+  bool static toldUs = false; // When in state 1, we're either making or receiving a call
+  isTouched = false;  // Reset unless there's a touch event
+  buttonAP.check();
+  buttonState.check();
 
   /* Act on state change */
   if(previousState != state) {
@@ -116,29 +151,100 @@ void loop(){
       if(state != 0) isOff = false;
   }
 
+  // The various cases we can face
+  switch (state){
+    case 0: // idle 
+      if(isTouched){
+        state = 1;
+        publish(String(state));   // TODO - make sure String is the right type for state in the payload
+        previouslyTouched = true;
+        makingCall = true;
+        Serial.println("Calling...");
+        idleTimer = millis();
+      }
+      break;
+    case 1: // calling
+      if(makingCall){
+          if(!toldUs) { // This is used to print once to the console
+            toldUs = true;
+          }
+          if(millis() - idleTimer > IDLE_TIMEOUT){
+            resetState();       // If no answer, we reset
+            Serial.println("No one answered :-(");
+          }
+      } else if(isTouched){  // If we're receiving a call, are now are touching the local device, then we're connected
+          state = 2;
+          publish(String(state));
+          previouslyTouched = true;
+      }
+      break;
+    case 2: // connected
+      if(isTouched){    // Touch again to disconnect
+          Serial.println("State 2. Button pushed. Moving to State 3");
+          state = 3;
+          publish(String(state));
+          previouslyTouched = false;
+      }
+      if(state == 3) {
+          Serial.println("Disconnecting. Starting count down timer.");
+          countDown = millis();   // Start the timer
+      }      
+      break;
+    case 3: // Disconnecting
+      if(millis() - countDown > IDLE_TIMEOUT) {
+          Serial.println("State 3. Timed out. Moving to State 0");
+          resetState();
+          previousState = 0;
+      }
+      if(isTouched && previouslyTouched == false){  // If we took our hand off but put it back on in under the time limit, re-connect
+          state = 2;
+          publish("2");
+          previouslyTouched = true;
+      }    
+      break;
+    default:
+      resetState();
+      break;
+  }
+
   // Update animation frame
   if(millis() - lastUpdate > patternInterval) { 
     updatePattern(state);
   }
+
+  //gotNewMessage = false;      // Reset
 }
 
-// The event handler for the button.
-void handleEvent(AceButton* /* button */, uint8_t eventType,
+// Clean house
+void resetState(){
+  state = 0;
+  //previousMQTTState = 0;
+  previouslyTouched = false;
+  makingCall = false;
+  publish(String(state));
+}
+
+// The event handler for the state change button.
+void handleStateEvent(AceButton* /* button */, uint8_t eventType,
     uint8_t buttonState) {
   switch (eventType) {
-    case AceButton::kEventClicked:
     case AceButton::kEventReleased:
       Serial.println("single click");
-      state = 1;
+      isTouched = true;     
+      //state = 1;
       break;
-    case AceButton::kEventDoubleClicked:
-      Serial.println("double click");
-      state = 2;
-      break;
+  }
+}
+
+// The event handler for the WiFi Access Point button.
+void handleAPEvent(AceButton* /* button */, uint8_t eventType,
+    uint8_t buttonState) {
+  switch (eventType) {
     case AceButton::kEventLongPressed:
       Serial.println("Button Held");
-      Serial.println("Erasing Config, restarting");     
-      state = 0;
+      Serial.println("Erasing Config, restarting");
+      //isTouched = true;     
+      //state = 0;        // TODO - what should the state be in this case?
       res = false;  // Reset WiFi to false since we want AP
       break;
   }
@@ -152,19 +258,30 @@ void  updatePattern(int pat){
         Serial.println("turn off");
         wipe();
         strip.show();
-        wm.resetSettings();
-        ESP.restart();      
-        // start portal w delay
-        Serial.println("Starting config portal");
-        wm.setConfigPortalTimeout(120);      
-        if (!wm.startConfigPortal("OnDemandAP","password")) {
-          Serial.println("failed to connect or hit timeout");
-          delay(3000);
-          // ESP.restart();
-        } else {
-          //if you get here you have connected to the WiFi
-          Serial.println("connected...yeey :)");
-        }         
+        if(resetWiFi()){
+          if(awsConnect){
+            if(!mqttTopicSubscribe){
+              Serial.println("CRITICAL ERROR: Couldn't connect to MQTT topic");
+            }
+          }else {
+            Serial.println("CRITICAL ERROR: Couldn't connect to AWS");
+          }        
+        }else{
+          Serial.println("CRITICAL ERROR: Couldn't connect to wifi");
+        }
+        // wm.resetSettings();
+        // ESP.restart();      
+        // // start portal w delay
+        // Serial.println("Starting config portal");
+        // wm.setConfigPortalTimeout(120);      
+        // if (!wm.startConfigPortal("OnDemandAP","password")) {
+        //   Serial.println("failed to connect or hit timeout");
+        //   delay(3000);
+        //   // ESP.restart();
+        // } else {
+        //   //if you get here you have connected to the WiFi
+        //   Serial.println("connected...yeey :)");
+        // }         
         isOff = true;
       }
       break;
@@ -260,7 +377,7 @@ void resetBrightness(){
     strip.setBrightness(BRIGHTNESS);
 }
 
-void resetWiFi(){
+bool resetWiFi(){
   wm.resetSettings();
   ESP.restart();
   // start portal w delay
@@ -269,9 +386,63 @@ void resetWiFi(){
   if (!wm.startConfigPortal("OnDemandAP","password")) {
     Serial.println("failed to connect or hit timeout");
     delay(3000);
-    // ESP.restart();
+    return false;
   } else {
     //if you get here you have connected to the WiFi
     Serial.println("connected...yeey :)");
+    return true;
   } 
+}
+
+bool awsConnect(){
+    if(hornbill.connect(HOST_ADDRESS,CLIENT_ID)== 0) {
+      Serial.println("Connected to AWS");
+      delay(1000);       // Delay 1 sec to make sure we can connect to MQTT topic after AWS connection
+      return true;
+    } else {
+        Serial.println("AWS connection failed, Check the HOST Address");
+        return false;
+    } 
+}
+
+bool mqttTopicSubscribe(){
+  if(0==hornbill.subscribe(TOPIC_NAME,mySubCallBackHandler)){
+      Serial.println("Subscribed to MQTT topic");
+      return true;
+  } else {
+      Serial.println("Subscribe Failed, Check the Thing Name and Certificates");
+      //while(1);
+      return false;
+  } 
+}
+
+void publish(String state){
+  sprintf(payload,"%d",state); // TODO - make sure string is the right type
+  Serial.println(payload);
+  if(hornbill.publish(TOPIC_NAME,payload) == 0) {
+    Serial.println("Message published successfully");
+  } else {
+    Serial.println("Message was not published");
+  }
+}
+
+// AWS MQTT callback handler
+void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad)
+{
+    strncpy(rcvdPayload,payLoad,payloadLen);
+    rcvdPayload[payloadLen] = 0;
+    msgReceived = 1;
+
+    Serial.println(rcvdPayload);
+
+    if(strcmp(rcvdPayload,"0")==0){
+        state = 0;
+    }else if(strcmp(rcvdPayload,"1")==0){
+        state = 1;
+    }else if(strcmp(rcvdPayload,"2")==0){
+        state = 2;
+    }else if(strcmp(rcvdPayload,"3")==0){
+        state = 3;
+        countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
+    }
 }

@@ -56,8 +56,10 @@ WiFiManager wm; // global wm instance
 bool res;       // Boolean letting us know if we can connect to saved WiFi
 
 /* Button stuff -----*/
-AceButton buttonState(PIN_STATE);
-AceButton buttonAP(PIN_SOFTAP);
+ButtonConfig buttonStateConfig;
+AceButton buttonState(&buttonStateConfig);
+ButtonConfig buttonAPConfig;
+AceButton buttonAP(&buttonAPConfig);
 void handleStateEvent(AceButton*, uint8_t, uint8_t); // function prototype for state button
 void handleAPEvent(AceButton*, uint8_t, uint8_t); // function prototype for access point button
 bool isTouched = false;
@@ -74,32 +76,23 @@ void setup() {
 
   // Configs for the buttons. Need Released event to change the state,
   // and LongPressed to go into SoftAP mode. Don't need Clicked.
-    ButtonConfig* buttonAPConfig = ButtonConfig::getSystemButtonConfig();
-    buttonAPConfig->setEventHandler(handleAPEvent);
-    buttonAPConfig->setFeature(ButtonConfig::kFeatureLongPress);
-    buttonAPConfig->setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);
-   
-    ButtonConfig* buttonStateConfig = ButtonConfig::getSystemButtonConfig();     
-    buttonStateConfig->setEventHandler(handleStateEvent);
-    buttonStateConfig->setFeature(ButtonConfig::kFeatureClick);
-    buttonStateConfig->setFeature(ButtonConfig::kFeatureRepeatPress);
+    buttonStateConfig.setEventHandler(handleStateEvent);
+    buttonStateConfig.setClickDelay(75);
+    buttonStateConfig.setFeature(ButtonConfig::kFeatureClick);
+    buttonStateConfig.setFeature(ButtonConfig::kFeatureRepeatPress);
     // These suppressions not really necessary but cleaner.
-    buttonStateConfig->setFeature(ButtonConfig::kFeatureSuppressAfterClick);
-    buttonStateConfig->setFeature(ButtonConfig::kFeatureSuppressAfterRepeatPress);    
+    buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterClick);
+    buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterRepeatPress);
+   
+  // ButtonConfig* buttonAPConfig = buttonAP.getButtonConfig();
+    buttonAPConfig.setEventHandler(handleAPEvent);
+    buttonAPConfig.setFeature(ButtonConfig::kFeatureLongPress);
+    buttonAPConfig.setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);  
 
     pinMode(PIN_SOFTAP, INPUT_PULLUP);    // Use built in pullup resistor
     pinMode(PIN_STATE, INPUT_PULLUP);     // Use built in pullup resistor
-
-    // Configure the ButtonConfig with the event handler, and enable all higher
-    // level events.
-    // ButtonConfig* buttonConfig = buttonAP.getButtonConfig();
-    // buttonConfig->setEventHandler(handleEvent);
-    // buttonConfig->setFeature(ButtonConfig::kFeatureDoubleClick);
-    // buttonConfig->setFeature(ButtonConfig::kFeatureSuppressClickBeforeDoubleClick);
-    // buttonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterClick);
-    // buttonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterDoubleClick);
-    // buttonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);
-    // buttonConfig->setFeature(ButtonConfig::kFeatureLongPress);
+    buttonState.init(PIN_STATE, HIGH, 0 /* id */);
+    buttonAP.init(PIN_SOFTAP, HIGH, 1 /* id */);
 
     // Initialize NeoPixels
     strip.begin(); // This initializes the NeoPixel library.

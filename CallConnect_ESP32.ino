@@ -9,6 +9,7 @@
 #include "WiFiManager.h" // https://github.com/tzapu/WiFiManager
 #include "AWS_IOT.h"
 #include "Adafruit_NeoPixel.h"
+#include <ArduinoJson.h>
 #include "AceButton.h"
 using namespace ace_button;
 
@@ -27,6 +28,7 @@ int counter = 0;    // Counter for iteration
 char HOST_ADDRESS[]="...";
 char CLIENT_ID[]= "...";
 char TOPIC_NAME[]= "...";
+StaticJsonBuffer<200> jsonBuffer;
 
 /* NeoPixel stuff -----*/
 #define NUMPIXELS1      14 // number of LEDs on ring
@@ -141,7 +143,8 @@ void loop(){
       resetBrightness();
       patternInterval = animationSpeed[state]; // set speed for this animation
       previousState = state;
-      if(state != 0) isOff = false;
+      // if(state != 0) isOff = false;
+      isOff = (state == 0) ? true : false;
   }
 
   // The various cases we can face
@@ -247,34 +250,23 @@ void handleAPEvent(AceButton* /* button */, uint8_t eventType,
 void  updatePattern(int pat){ 
   switch(pat) {
     case 0:
-      if(!isOff && !res){
+      if(!isOff){               
         Serial.println("turn off");
         wipe();
         strip.show();
-        if(resetWiFi()){
-          if(awsConnect){
-            if(!mqttTopicSubscribe){
-              Serial.println("CRITICAL ERROR: Couldn't connect to MQTT topic");
-            }
-          }else {
-            Serial.println("CRITICAL ERROR: Couldn't connect to AWS");
-          }        
-        }else{
-          Serial.println("CRITICAL ERROR: Couldn't connect to wifi");
+        if(!res){   // If we went to state 0 as a result of WiFi button, then this will be false. Otherwise it's true
+          if(resetWiFi()){
+            if(awsConnect){
+              if(!mqttTopicSubscribe){
+                Serial.println("CRITICAL ERROR: Couldn't connect to MQTT topic");
+              }
+            }else {
+              Serial.println("CRITICAL ERROR: Couldn't connect to AWS");
+            }        
+            }else{
+              Serial.println("CRITICAL ERROR: Couldn't connect to wifi");
+            }     
         }
-        // wm.resetSettings();
-        // ESP.restart();      
-        // // start portal w delay
-        // Serial.println("Starting config portal");
-        // wm.setConfigPortalTimeout(120);      
-        // if (!wm.startConfigPortal("OnDemandAP","password")) {
-        //   Serial.println("failed to connect or hit timeout");
-        //   delay(3000);
-        //   // ESP.restart();
-        // } else {
-        //   //if you get here you have connected to the WiFi
-        //   Serial.println("connected...yeey :)");
-        // }         
         isOff = true;
       }
       break;
@@ -410,9 +402,20 @@ bool mqttTopicSubscribe(){
 }
 
 void publish(String state){
-  sprintf(payload,"%d",state); // TODO - make sure string is the right type
-  Serial.println(payload);
-  if(hornbill.publish(TOPIC_NAME,payload) == 0) {
+  Serial.println("Function: publish()");
+  // Trying JSON
+  JsonObject& payload = jsonBuffer.createObject();
+  payload["thing_name"] = String(CLIENT_ID);
+  payload["state"] = state;
+  String sPayload = "";
+  payload.printTo(sPayload);
+  char* cPayload = &sPayload[0u];
+
+
+  //sprintf(payload,"%d",state); // TODO - make sure string is the right type
+  //Serial.println(payload);
+ // if(hornbill.publish(TOPIC_NAME,payload) == 0) {
+  if(hornbill.publish(TOPIC_NAME,cPayload) == 0) {
     Serial.println("Message published successfully");
   } else {
     Serial.println("Message was not published");
@@ -422,19 +425,27 @@ void publish(String state){
 // AWS MQTT callback handler
 void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad)
 {
+
+    Serial.println("Function: mySubCallBackHandler()");
     strncpy(rcvdPayload,payLoad,payloadLen);
     rcvdPayload[payloadLen] = 0;
     msgReceived = 1;
+    Serial.println("   "); Serial.println(rcvdPayload);
+    JsonObject& root = jsonBuffer.parseObject(rcvdPayload);
+    const char* d = root["thing_name"];
+    if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
 
-    Serial.println(rcvdPayload);
+    const char* s = root["state"];
+    Serial.print("State value: "); Serial.println(s);
 
-    if(strcmp(rcvdPayload,"0")==0){
+    //if(strcmp(rcvdPayload,"0")==0){
+    if(strcmp(s,"0")==0){  
         state = 0;
-    }else if(strcmp(rcvdPayload,"1")==0){
+    }else if(strcmp(s,"1")==0){
         state = 1;
-    }else if(strcmp(rcvdPayload,"2")==0){
+    }else if(strcmp(s,"2")==0){
         state = 2;
-    }else if(strcmp(rcvdPayload,"3")==0){
+    }else if(strcmp(s,"3")==0){
         state = 3;
         countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
     }

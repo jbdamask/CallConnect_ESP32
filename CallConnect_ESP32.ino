@@ -28,7 +28,9 @@ int counter = 0;    // Counter for iteration
 char HOST_ADDRESS[]="...";
 char CLIENT_ID[]= "...";
 char TOPIC_NAME[]= "...";
-StaticJsonBuffer<512> jsonBuffer;
+
+/* JSON -----*/
+#define JSON_BUFFER_SIZE  200
 
 /* NeoPixel stuff -----*/
 #define NUMPIXELS1      14 // number of LEDs on ring
@@ -406,41 +408,37 @@ bool mqttTopicSubscribe(){
 
 void publish(String state){
   Serial.println("Function: publish()");
-  // Trying JSON
-  JsonObject& payload = jsonBuffer.createObject();
-  payload["thing_name"] = String(CLIENT_ID);
-  payload["state"] = state;
-  String sPayload = "";
-  payload.printTo(sPayload);
-  char* cPayload = &sPayload[0u];
-
-
-  //sprintf(payload,"%d",state); // TODO - make sure string is the right type
-  //Serial.println(payload);
- // if(hornbill.publish(TOPIC_NAME,payload) == 0) {
-  if(hornbill.publish(TOPIC_NAME,cPayload) == 0) {
+  StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  root["thing_name"] = String(CLIENT_ID);
+  root["state"] = state;
+  Serial.println("    Created the object. Now print to json");
+  String sJson = "";
+  root.printTo(sJson);
+  char* cJson = &sJson[0u];
+  Serial.println("   Payload being published is:");
+  Serial.println(cJson);
+  int response = hornbill.publish(TOPIC_NAME,cJson);
+  if( response == 0) {
     Serial.println("Message published successfully");
   } else {
-    Serial.println("Message was not published");
+    Serial.print("Message was not published. Error code: ");Serial.println(response);
   }
 }
 
 // AWS MQTT callback handler
 void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad)
 {
-
     Serial.println("Function: mySubCallBackHandler()");
-    strncpy(rcvdPayload,payLoad,payloadLen);
-    rcvdPayload[payloadLen] = 0;
-    msgReceived = 1;
-    Serial.println("   "); Serial.println(rcvdPayload);
-    JsonObject& root = jsonBuffer.parseObject(rcvdPayload);
+
+    StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+    JsonObject& root = jsonBuffer.parseObject(payLoad);
     const char* d = root["thing_name"];
+    const char* s = root["state"];    
     Serial.println(String(d));
     if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
 
     Serial.println("    Message is from another device. Printing...");
-    const char* s = root["state"];
     Serial.print("State value: "); Serial.println(s);
 
     if(strcmp(s,"0")==0){  

@@ -28,13 +28,13 @@ int counter = 0;    // Counter for iteration
 char HOST_ADDRESS[]="...";
 char CLIENT_ID[]= "...";
 char TOPIC_NAME[]= "...";
-StaticJsonBuffer<200> jsonBuffer;
+StaticJsonBuffer<512> jsonBuffer;
 
 /* NeoPixel stuff -----*/
 #define NUMPIXELS1      14 // number of LEDs on ring
 #define BRIGHTNESS      30 // Max brightness of NeoPixels
 unsigned long patternInterval = 20 ; // time between steps in the pattern
-unsigned long animationSpeed [] = { 100, 50, 2 } ; // speed for each animation (order counts!)
+unsigned long animationSpeed [] = { 100, 50, 2, 2 } ; // speed for each animation (order counts!)
 #define ANIMATIONS sizeof(animationSpeed) / sizeof(animationSpeed[0])
 // Colors for sparkle
 uint8_t myFavoriteColors[][3] = {{200,   0, 200},   // purple
@@ -275,7 +275,10 @@ void  updatePattern(int pat){
       sparkle(3);
       break;     
     case 2:
-      breathe(1); // Breath blue
+      breathe(1); // Breathe blue
+      break;
+    case 3:
+      breathe(2); // Breathe red
       break;
     default:
       // donada
@@ -433,12 +436,13 @@ void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad)
     Serial.println("   "); Serial.println(rcvdPayload);
     JsonObject& root = jsonBuffer.parseObject(rcvdPayload);
     const char* d = root["thing_name"];
+    Serial.println(String(d));
     if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
 
+    Serial.println("    Message is from another device. Printing...");
     const char* s = root["state"];
     Serial.print("State value: "); Serial.println(s);
 
-    //if(strcmp(rcvdPayload,"0")==0){
     if(strcmp(s,"0")==0){  
         state = 0;
     }else if(strcmp(s,"1")==0){

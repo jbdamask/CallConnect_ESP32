@@ -19,6 +19,7 @@ This is a quickly evolving example. It combines several common libraries to cont
 * [AceButton](https://github.com/bxparks/AceButton)
 * [Adafruit NeoPixel](https://github.com/adafruit/Adafruit_NeoPixel)
 * [AWS_IOT](https://github.com/ExploreEmbedded/Hornbill-Examples/tree/master/arduino-esp32/AWS_IOT) 
+* [ArduinoJSON](https://arduinojson.org/)
 
 ### Helpful Sites
 
@@ -36,3 +37,4 @@ This is a quickly evolving example. It combines several common libraries to cont
 * [Brian Park](https://github.com/bxparks) for AceButton
 * [AWS IoT](https://aws.amazon.com/iot/?nc=sn&loc=0)
 * [ExploreEmbedded](https://exploreembedded.com/) for AWS_IOT library
+* [These dudes](https://github.com/bblanchon/ArduinoJson/graphs/contributors) for the insanley cool ArduinoJSON library

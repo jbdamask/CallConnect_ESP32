@@ -16,9 +16,10 @@ This is a quickly evolving example. It combines several common libraries to cont
 ### Libraries
 
 * WiFIManager - As of January 31, 2019 this _must_ be the [development branch](https://github.com/tzapu/WiFiManager/tree/development) in order for ESP32 boards to work
+* [WiFiClientSecure](https://github.com/espressif/arduino-esp32/tree/master/libraries/WiFiClientSecure)
 * [AceButton](https://github.com/bxparks/AceButton)
 * [Adafruit NeoPixel](https://github.com/adafruit/Adafruit_NeoPixel)
-* [AWS_IOT](https://github.com/ExploreEmbedded/Hornbill-Examples/tree/master/arduino-esp32/AWS_IOT) 
+* [Arduino-mqtt](https://github.com/256dpi/arduino-mqtt)
 * [ArduinoJSON](https://arduinojson.org/)
 
 ### Helpful Sites
@@ -36,5 +37,4 @@ This is a quickly evolving example. It combines several common libraries to cont
 * [Shawn Alverson](https://github.com/tablatronix) from Tabletronix for the awesome WiFiManager
 * [Brian Park](https://github.com/bxparks) for AceButton
 * [AWS IoT](https://aws.amazon.com/iot/?nc=sn&loc=0)
-* [ExploreEmbedded](https://exploreembedded.com/) for AWS_IOT library
-* [These dudes](https://github.com/bblanchon/ArduinoJson/graphs/contributors) for the insanley cool ArduinoJSON library
+* [These dudes](https://github.com/bblanchon/ArduinoJson/graphs/contributors) for the ArduinoJSON library

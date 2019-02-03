@@ -118,11 +118,17 @@ void setup() {
         Serial.println("connected to wifi :)");
     }
 
-    awsConnect();
-    mqttTopicSubscribe();
+    connect();
 }
 
 void loop(){
+  /*-- Added sunday. Is this why i had so many failures?*/
+  if(!client.connected()){
+    connect();
+  }
+  client.loop();
+/*-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
+
   bool static toldUs = false; // When in state 1, we're either making or receiving a call
   isTouched = false;  // Reset unless there's a touch event
   buttonAP.check();
@@ -374,7 +380,14 @@ bool resetWiFi(){
   } 
 }
 
+void connect(){
+    awsConnect();
+    mqttTopicSubscribe();
+}
+
 bool awsConnect(){
+  static int awsConnectTimer = 0;
+  int awsConnectTimout = 10000;
   net.setCACert(rootCABuff);
   net.setCertificate(certificateBuff);
   net.setPrivateKey(privateKeyBuff);
@@ -382,16 +395,20 @@ bool awsConnect(){
 
   Serial.print("\nConnecting to AWS");
   while (!client.connect(CLIENT_ID)) {
+    if(awsConnectTimer == 0) awsConnectTimer = millis();
+    if (millis() - awsConnectTimer > awsConnectTimout) {
+      Serial.println("CONNECTION FAILURE: Could not connect to aws");
+      return false;
+    }
     Serial.print(".");
     delay(100);
   }
 
-  if(client.connected()) {
-    Serial.println("Connected to AWS"); 
-  } else {
-    Serial.println("Failed to connect to AWS.");
-    Serial.println(client.returnCode());
-  }
+  Serial.println("Connected to AWS"); 
+  awsConnectTimer = 0;
+
+  return true;
+
 }
 
 bool mqttTopicSubscribe(){
@@ -415,8 +432,13 @@ void publish(String state){
   root.printTo(sJson);
   char* cJson = &sJson[0u];
  
+  if(!client.connected()){
+    Serial.println("PUBLISH ERROR: Client not connected");
+  }
   if(!client.publish(publishTopic, cJson)){
-   Serial.println("Publish failed");
+   Serial.println("PUBLISH ERROR: Publish failed");
+   Serial.print("  Topic: "); Serial.println(publishTopic);
+   Serial.print("  Message: "); Serial.println(cJson);
   }
 
 }

@@ -7,10 +7,12 @@
  */
 
 #include "WiFiManager.h" // https://github.com/tzapu/WiFiManager
-#include "AWS_IOT.h"
+#include <WiFiClientSecure.h>
+#include <MQTTClient.h>   //you need to install this library: https://github.com/256dpi/arduino-mqtt
 #include "Adafruit_NeoPixel.h"
 #include <ArduinoJson.h>
 #include "AceButton.h"
+#include "Config.h"
 using namespace ace_button;
 
 /* Pins -----*/
@@ -19,18 +21,16 @@ using namespace ace_button;
 #define PIN_NEOPIXEL   12    // pin connected to the small NeoPixels strip
 
 /* AWS IOT -----*/
-AWS_IOT hornbill;
 int tick=0,msgCount=0,msgReceived = 0;
 int status = WL_IDLE_STATUS;    // Connection status
 char payload[512];  // Payload array to store thing shadow JSON document
 char rcvdPayload[512];
 int counter = 0;    // Counter for iteration
-char HOST_ADDRESS[]="...";
-char CLIENT_ID[]= "...";
-char TOPIC_NAME[]= "...";
+WiFiClientSecure net;
+MQTTClient client;
 
 /* JSON -----*/
-#define JSON_BUFFER_SIZE  200
+#define JSON_BUFFER_SIZE  512
 
 /* NeoPixel stuff -----*/
 #define NUMPIXELS1      14 // number of LEDs on ring
@@ -88,7 +88,6 @@ void setup() {
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterClick);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterRepeatPress);
    
-  // ButtonConfig* buttonAPConfig = buttonAP.getButtonConfig();
     buttonAPConfig.setEventHandler(handleAPEvent);
     buttonAPConfig.setFeature(ButtonConfig::kFeatureLongPress);
     buttonAPConfig.setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);  
@@ -105,7 +104,7 @@ void setup() {
 
     Serial.println("Trying to reconnect to wifi...");
     // Initiatize WiFiManager
-    res = wm.autoConnect("AutoConnectAP","password"); // password protected ap
+    res = wm.autoConnect(CLIENT_ID,"password"); // password protected ap
     wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
 
     // Seeing if we can re-connect to known WiFi
@@ -119,19 +118,17 @@ void setup() {
         Serial.println("connected to wifi :)");
     }
 
-    // If connected to WiFi, then connect to AWS 
-    // if(hornbill.connect(HOST_ADDRESS,CLIENT_ID)== 0) {
-    //     Serial.println("Connected to AWS, bru");
-    //     delay(1000);
-    // } else {
-    //     Serial.println("AWS connection failed, Check the HOST Address");
-    //     while(1);
-    // } 
-    awsConnect();
-    mqttTopicSubscribe();
+    connect();
 }
 
 void loop(){
+  /*-- Added sunday. Is this why i had so many failures?*/
+  if(!client.connected()){
+    connect();
+  }
+  client.loop();
+/*-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
+
   bool static toldUs = false; // When in state 1, we're either making or receiving a call
   isTouched = false;  // Reset unless there's a touch event
   buttonAP.check();
@@ -139,8 +136,7 @@ void loop(){
 
   /* Act on state change */
   if(previousState != state) {
-      Serial.print("New state: ");
-      Serial.println(state);
+      //Serial.print("New state: "); Serial.println(state);
       wipe();
       resetBrightness();
       patternInterval = animationSpeed[state]; // set speed for this animation
@@ -384,51 +380,94 @@ bool resetWiFi(){
   } 
 }
 
+void connect(){
+    awsConnect();
+    mqttTopicSubscribe();
+}
+
 bool awsConnect(){
-    if(hornbill.connect(HOST_ADDRESS,CLIENT_ID)== 0) {
-      Serial.println("Connected to AWS");
-      delay(1000);       // Delay 1 sec to make sure we can connect to MQTT topic after AWS connection
-      return true;
-    } else {
-        Serial.println("AWS connection failed, Check the HOST Address");
-        return false;
-    } 
+  static int awsConnectTimer = 0;
+  int awsConnectTimout = 10000;
+  net.setCACert(rootCABuff);
+  net.setCertificate(certificateBuff);
+  net.setPrivateKey(privateKeyBuff);
+  client.begin(awsEndPoint, 8883, net);
+
+  Serial.print("\nConnecting to AWS");
+  while (!client.connect(CLIENT_ID)) {
+    if(awsConnectTimer == 0) awsConnectTimer = millis();
+    if (millis() - awsConnectTimer > awsConnectTimout) {
+      Serial.println("CONNECTION FAILURE: Could not connect to aws");
+      return false;
+    }
+    Serial.print(".");
+    delay(100);
+  }
+
+  Serial.println("Connected to AWS"); 
+  awsConnectTimer = 0;
+
+  return true;
+
 }
 
 bool mqttTopicSubscribe(){
-  if(0==hornbill.subscribe(TOPIC_NAME,mySubCallBackHandler)){
-      Serial.println("Subscribed to MQTT topic");
-      return true;
-  } else {
-      Serial.println("Subscribe Failed, Check the Thing Name and Certificates");
-      //while(1);
-      return false;
-  } 
+  client.subscribe(subscribeTopic);
+  client.onMessage(messageReceived);
 }
 
 void publish(String state){
+  char msg[50];
+  static int value = 0;
+
+  int NUM_RETRIES = 10;
+  int cnt = 0;
   Serial.println("Function: publish()");
   StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
   root["thing_name"] = String(CLIENT_ID);
   root["state"] = state;
-  Serial.println("    Created the object. Now print to json");
+  //Serial.println("    Created the object. Now print to json");
   String sJson = "";
   root.printTo(sJson);
   char* cJson = &sJson[0u];
-  Serial.println("   Payload being published is:");
-  Serial.println(cJson);
-  int response = hornbill.publish(TOPIC_NAME,cJson);
-  if( response == 0) {
-    Serial.println("Message published successfully");
-  } else {
-    Serial.print("Message was not published. Error code: ");Serial.println(response);
+ 
+  if(!client.connected()){
+    Serial.println("PUBLISH ERROR: Client not connected");
   }
+  if(!client.publish(publishTopic, cJson)){
+   Serial.println("PUBLISH ERROR: Publish failed");
+   Serial.print("  Topic: "); Serial.println(publishTopic);
+   Serial.print("  Message: "); Serial.println(cJson);
+  }
+
+}
+
+void messageReceived(String &topic, String &payload) {
+  Serial.println("incoming: " + topic + " - " + payload);
+    StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+    JsonObject& root = jsonBuffer.parseObject(payload);
+    const char* d = root["thing_name"];
+    const char* s = root["state"];    
+    Serial.println(String(d));
+    if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
+    Serial.println("    Message is from another device. Printing...");
+    //Serial.print("State value: "); Serial.println(s);
+
+    if(strcmp(s,"0")==0){  
+        state = 0;
+    }else if(strcmp(s,"1")==0){
+        state = 1;
+    }else if(strcmp(s,"2")==0){
+        state = 2;
+    }else if(strcmp(s,"3")==0){
+        state = 3;
+        countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
+    }    
 }
 
 // AWS MQTT callback handler
-void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad)
-{
+void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad){
     Serial.println("Function: mySubCallBackHandler()");
 
     StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
@@ -439,7 +478,7 @@ void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad)
     if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
 
     Serial.println("    Message is from another device. Printing...");
-    Serial.print("State value: "); Serial.println(s);
+    //Serial.print("State value: "); Serial.println(s);
 
     if(strcmp(s,"0")==0){  
         state = 0;

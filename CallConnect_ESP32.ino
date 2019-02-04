@@ -70,14 +70,11 @@ bool isTouched = false;
 bool previouslyTouched = false;
 bool makingCall = false;    // Keep track of who calls and who receives
 
+/* ================================== *
+*   Function definitions              *
+*  ================================== */
 
-
-void setup() {
-    WiFi.disconnect(true);
-    delay(5000);
-    Serial.begin(115200);
-    Serial.println("\n Starting");
-
+void buttonSetup(){
   // Configs for the buttons. Need Released event to change the state,
   // and LongPressed to go into SoftAP mode. Don't need Clicked.
     buttonStateConfig.setEventHandler(handleStateEvent);
@@ -96,117 +93,6 @@ void setup() {
     pinMode(PIN_STATE, INPUT_PULLUP);     // Use built in pullup resistor
     buttonState.init(PIN_STATE, HIGH, 0 /* id */);
     buttonAP.init(PIN_SOFTAP, HIGH, 1 /* id */);
-
-    // Initialize NeoPixels
-    strip.begin(); // This initializes the NeoPixel library.
-    resetBrightness();// These things are bright!
-    updatePattern(state);
-
-    Serial.println("Trying to reconnect to wifi...");
-    // Initiatize WiFiManager
-    res = wm.autoConnect(CLIENT_ID,"password"); // password protected ap
-    wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
-
-    // Seeing if we can re-connect to known WiFi
-    if(!res) {
-        Serial.println("Failed to connect or hit timeout");
-        //wm.resetSettings(); // Uncomment for debugging
-        //ESP.restart();
-    } 
-    else {
-        //if you get here you have connected to the WiFi    
-        Serial.println("connected to wifi :)");
-    }
-
-    connect();
-}
-
-void loop(){
-  /*-- Added sunday. Is this why i had so many failures?*/
-  if(!client.connected()){
-    connect();
-  }
-  client.loop();
-/*-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
-
-  bool static toldUs = false; // When in state 1, we're either making or receiving a call
-  isTouched = false;  // Reset unless there's a touch event
-  buttonAP.check();
-  buttonState.check();
-
-  /* Act on state change */
-  if(previousState != state) {
-      //Serial.print("New state: "); Serial.println(state);
-      wipe();
-      resetBrightness();
-      patternInterval = animationSpeed[state]; // set speed for this animation
-      previousState = state;
-      // if(state != 0) isOff = false;
-      isOff = (state == 0) ? true : false;
-  }
-
-  // The various cases we can face
-  switch (state){
-    case 0: // idle 
-      if(isTouched){
-        state = 1;
-        publish(String(state));   // TODO - make sure String is the right type for state in the payload
-        previouslyTouched = true;
-        makingCall = true;
-        Serial.println("Calling...");
-        idleTimer = millis();
-      }
-      break;
-    case 1: // calling
-      if(makingCall){
-          if(!toldUs) { // This is used to print once to the console
-            toldUs = true;
-          }
-          if(millis() - idleTimer > IDLE_TIMEOUT){
-            resetState();       // If no answer, we reset
-            Serial.println("No one answered :-(");
-          }
-      } else if(isTouched){  // If we're receiving a call, are now are touching the local device, then we're connected
-          state = 2;
-          publish(String(state));
-          previouslyTouched = true;
-      }
-      break;
-    case 2: // connected
-      if(isTouched){    // Touch again to disconnect
-          Serial.println("State 2. Button pushed. Moving to State 3");
-          state = 3;
-          publish(String(state));
-          previouslyTouched = false;
-      }
-      if(state == 3) {
-          Serial.println("Disconnecting. Starting count down timer.");
-          countDown = millis();   // Start the timer
-      }      
-      break;
-    case 3: // Disconnecting
-      if(millis() - countDown > IDLE_TIMEOUT) {
-          Serial.println("State 3. Timed out. Moving to State 0");
-          resetState();
-          previousState = 0;
-      }
-      if(isTouched && previouslyTouched == false){  // If we took our hand off but put it back on in under the time limit, re-connect
-          state = 2;
-          publish("2");
-          previouslyTouched = true;
-      }    
-      break;
-    default:
-      resetState();
-      break;
-  }
-
-  // Update animation frame
-  if(millis() - lastUpdate > patternInterval) { 
-    updatePattern(state);
-  }
-
-  //gotNewMessage = false;      // Reset
 }
 
 // Clean house
@@ -491,3 +377,124 @@ void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad){
         countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
     }
 }
+
+void setup() {
+    WiFi.disconnect(true);
+    delay(5000);
+    Serial.begin(115200);
+    Serial.println("\n Starting");
+
+    buttonSetup();
+
+    // Initialize NeoPixels
+    strip.begin(); // This initializes the NeoPixel library.
+    resetBrightness();// These things are bright!
+    updatePattern(state);
+
+    Serial.println("Trying to reconnect to wifi...");
+    // Initiatize WiFiManager
+    res = wm.autoConnect(CLIENT_ID,"password"); // password protected ap
+    wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
+
+    // Seeing if we can re-connect to known WiFi
+    if(!res) {
+        Serial.println("Failed to connect or hit timeout");
+        //wm.resetSettings(); // Uncomment for debugging
+        //ESP.restart();
+    } 
+    else {
+        //if you get here you have connected to the WiFi    
+        Serial.println("connected to wifi :)");
+    }
+
+    connect();
+}
+
+void loop(){
+  /*-- Added sunday. Is this why i had so many failures?*/
+  if(!client.connected()){
+    connect();
+  }
+  client.loop();
+  /*-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
+
+  bool static toldUs = false; // When in state 1, we're either making or receiving a call
+  isTouched = false;  // Reset unless there's a touch event
+  buttonAP.check();
+  buttonState.check();
+
+  /* Act on state change */
+  if(previousState != state) {
+      //Serial.print("New state: "); Serial.println(state);
+      wipe();
+      resetBrightness();
+      patternInterval = animationSpeed[state]; // set speed for this animation
+      previousState = state;
+      // if(state != 0) isOff = false;
+      isOff = (state == 0) ? true : false;
+  }
+
+  // The various cases we can face
+  switch (state){
+    case 0: // idle 
+      if(isTouched){
+        state = 1;
+        publish(String(state));   // TODO - make sure String is the right type for state in the payload
+        previouslyTouched = true;
+        makingCall = true;
+        Serial.println("Calling...");
+        idleTimer = millis();
+      }
+      break;
+    case 1: // calling
+      if(makingCall){
+          if(!toldUs) { // This is used to print once to the console
+            toldUs = true;
+          }
+          if(millis() - idleTimer > IDLE_TIMEOUT){
+            resetState();       // If no answer, we reset
+            Serial.println("No one answered :-(");
+          }
+      } else if(isTouched){  // If we're receiving a call, are now are touching the local device, then we're connected
+          state = 2;
+          publish(String(state));
+          previouslyTouched = true;
+      }
+      break;
+    case 2: // connected
+      if(isTouched){    // Touch again to disconnect
+          Serial.println("State 2. Button pushed. Moving to State 3");
+          state = 3;
+          publish(String(state));
+          previouslyTouched = false;
+      }
+      if(state == 3) {
+          Serial.println("Disconnecting. Starting count down timer.");
+          countDown = millis();   // Start the timer
+      }      
+      break;
+    case 3: // Disconnecting
+      if(millis() - countDown > IDLE_TIMEOUT) {
+          Serial.println("State 3. Timed out. Moving to State 0");
+          resetState();
+          previousState = 0;
+      }
+      if(isTouched && previouslyTouched == false){  // If we took our hand off but put it back on in under the time limit, re-connect
+          state = 2;
+          publish("2");
+          previouslyTouched = true;
+      }    
+      break;
+    default:
+      resetState();
+      break;
+  }
+
+  // Update animation frame
+  if(millis() - lastUpdate > patternInterval) { 
+    updatePattern(state);
+  }
+
+  //gotNewMessage = false;      // Reset
+}
+

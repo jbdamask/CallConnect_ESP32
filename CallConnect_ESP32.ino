@@ -9,7 +9,6 @@
 #include "WiFiManager.h" // https://github.com/tzapu/WiFiManager
 #include <WiFiClientSecure.h>
 #include <MQTTClient.h>   //you need to install this library: https://github.com/256dpi/arduino-mqtt
-//#include "Adafruit_NeoPixel.h"
 #include <NeoPixelBrightnessBus.h>
 #include <NeoPixelAnimator.h>
 #include <ArduinoJson.h>
@@ -47,7 +46,6 @@ uint8_t myFavoriteColors[][3] = {{200,   0, 200},   // purple
                                  {200, 200, 200},   // white
                                };
 #define FAVCOLORS sizeof(myFavoriteColors) / 3
-// Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 bool isOff = true;  // NeoPixel on/off toggle
 NeoPixelBrightnessBus<NeoGrbFeature, Neo800KbpsMethod> strip(NUMPIXELS1, PIN_NEOPIXEL);
 const uint8_t AnimationChannels = 1; // we only need one as all the pixels are animated at once for breathing
@@ -114,7 +112,6 @@ void buttonSetup(){
 // Clean house
 void resetState(){
   state = 0;
-  //previousMQTTState = 0;
   previouslyTouched = false;
   makingCall = false;
   publish(String(state));
@@ -235,32 +232,6 @@ void breathe(int breatheColor){
     }
   }
 }
-// void breathe(int x) {
-//   float SpeedFactor = 0.008;
-//   static int i = 0;
-//   static int r,g,b;
-//   switch(x){
-//     case 1:
-//       r = 0; g = 127; b = 127;
-//       break;
-//     case 2:
-//       r = 255; g = 0; b = 0;
-//       break;
-//   }
-//   // Make the lights breathe
-//   float intensity = BRIGHTNESS /2.0 * (1.0 + sin(SpeedFactor * i));
-//   for (int j=0; j<strip.numPixels(); j++) {
-//     strip.setPixelColor(j, strip.Color(r, g, b)); // Use with WS2812B
-//     // strip.setPixelColor(j, strip.Color(g, r, b));   // Use with SK6812RGBW
-//   }
-//   strip.setBrightness(intensity);
-//   strip.show();
-//   i++;
-//   if(i >= 65535){
-//     i = 0;
-//   }
-//   lastUpdate = millis();
-// }
 
 // LED sparkling. 
 void sparkle(uint8_t howmany) {
@@ -401,6 +372,7 @@ void publish(String state){
 
 }
 
+// AWS MQTT callback handler
 void messageReceived(String &topic, String &payload) {
   Serial.println("incoming: " + topic + " - " + payload);
     StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
@@ -424,43 +396,13 @@ void messageReceived(String &topic, String &payload) {
     }    
 }
 
-// AWS MQTT callback handler
-void mySubCallBackHandler (char *topicName, int payloadLen, char *payLoad){
-    Serial.println("Function: mySubCallBackHandler()");
-
-    StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-    JsonObject& root = jsonBuffer.parseObject(payLoad);
-    const char* d = root["thing_name"];
-    const char* s = root["state"];    
-    Serial.println(String(d));
-    if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
-
-    Serial.println("    Message is from another device. Printing...");
-    //Serial.print("State value: "); Serial.println(s);
-
-    if(strcmp(s,"0")==0){  
-        state = 0;
-    }else if(strcmp(s,"1")==0){
-        state = 1;
-    }else if(strcmp(s,"2")==0){
-        state = 2;
-    }else if(strcmp(s,"3")==0){
-        state = 3;
-        countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
-    }
-}
-
 // Update the animation
 void  updatePattern(int pat){ 
   switch(pat) {
     case 0:
-      // if(!isOff){               
       if(isOff){
-        //Serial.println("turn off");
         wipe();
-        // strip.show();
         strip.Show();
-           //isOff = true;
       }
       break;
     case 1: 
@@ -516,12 +458,11 @@ void setup() {
 }
 
 void loop(){
-  /*-- Added sunday. Is this why i had so many failures?*/
+  // Make sure we're still connected
   if(!client.connected()){
     connect();
   }
   client.loop();
-  /*-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
 
   bool static toldUs = false; // When in state 1, we're either making or receiving a call
   isTouched = false;  // Reset unless there's a touch event
@@ -534,13 +475,10 @@ void loop(){
       wipe();
       if(state != 0 ) resetBrightness();      
       strip.Show();
-      //patternInterval = animationSpeed[state]; // set speed for this animation
       previousState = state;
-      // if(state != 0) isOff = false;
       isOff = (state == 0) ? true : false;
   }
 
-   
 
   // The various cases we can face
   switch (state){
@@ -603,7 +541,6 @@ void loop(){
       if(millis() - countDown > IDLE_TIMEOUT) {
           Serial.println("State 3. Timed out. Moving to State 0");
           resetState();
-          //previousState = 0;
       }
       if(isTouched && previouslyTouched == false){  // If we took our hand off but put it back on in under the time limit, re-connect
           state = 2;
@@ -616,100 +553,5 @@ void loop(){
       break;
   }
 
-  // // Update animation frame
-  // if(millis() - lastUpdate > patternInterval) { 
-  //   updatePattern(state);
-  // }
-
-  //gotNewMessage = false;      // Reset
 }
-
-
-// void loop(){
-//   /*-- Added sunday. Is this why i had so many failures?*/
-//   if(!client.connected()){
-//     connect();
-//   }
-//   client.loop();
-//   /*-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
-
-//   bool static toldUs = false; // When in state 1, we're either making or receiving a call
-//   isTouched = false;  // Reset unless there's a touch event
-//   buttonAP.check();
-//   buttonState.check();
-
-//   /* Act on state change */
-//   if(previousState != state) {
-//       Serial.print("New state: "); Serial.println(state);
-//       wipe();
-//       resetBrightness();
-//       patternInterval = animationSpeed[state]; // set speed for this animation
-//       previousState = state;
-//       // if(state != 0) isOff = false;
-//       isOff = (state == 0) ? true : false;
-//   }
-
-//   // The various cases we can face
-//   switch (state){
-//     case 0: // idle 
-//       if(isTouched){
-//         state = 1;
-//         publish(String(state));   // TODO - make sure String is the right type for state in the payload
-//         previouslyTouched = true;
-//         makingCall = true;
-//         Serial.println("Calling...");
-//         idleTimer = millis();
-//       }
-//       break;
-//     case 1: // calling
-//       if(makingCall){
-//           if(!toldUs) { // This is used to print once to the console
-//             toldUs = true;
-//           }
-//           if(millis() - idleTimer > IDLE_TIMEOUT){
-//             resetState();       // If no answer, we reset
-//             Serial.println("No one answered :-(");
-//           }
-//       } else if(isTouched){  // If we're receiving a call, are now are touching the local device, then we're connected
-//           state = 2;
-//           publish(String(state));
-//           previouslyTouched = true;
-//       }
-//       break;
-//     case 2: // connected
-//       if(isTouched){    // Touch again to disconnect
-//           Serial.println("State 2. Button pushed. Moving to State 3");
-//           state = 3;
-//           publish(String(state));
-//           previouslyTouched = false;
-//       }
-//       if(state == 3) {
-//           Serial.println("Disconnecting. Starting count down timer.");
-//           countDown = millis();   // Start the timer
-//       }      
-//       break;
-//     case 3: // Disconnecting
-//       if(millis() - countDown > IDLE_TIMEOUT) {
-//           Serial.println("State 3. Timed out. Moving to State 0");
-//           resetState();
-//           previousState = 0;
-//       }
-//       if(isTouched && previouslyTouched == false){  // If we took our hand off but put it back on in under the time limit, re-connect
-//           state = 2;
-//           publish("2");
-//           previouslyTouched = true;
-//       }    
-//       break;
-//     default:
-//       resetState();
-//       break;
-//   }
-
-//   // Update animation frame
-//   if(millis() - lastUpdate > patternInterval) { 
-//     updatePattern(state);
-//   }
-
-//   //gotNewMessage = false;      // Reset
-// }
 

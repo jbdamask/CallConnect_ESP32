@@ -17,9 +17,10 @@
 using namespace ace_button;
 
 /* Pins -----*/
-#define PIN_SOFTAP    13    // Button pin for reconfiguring WiFiManager
 #define PIN_STATE     27    // Button pin for changing state
+#define PIN_SOFTAP    13    // Button pin for reconfiguring WiFiManager
 #define PIN_NEOPIXEL   12    // pin connected to the small NeoPixels strip
+
 
 /* AWS IOT -----*/
 int tick=0,msgCount=0,msgReceived = 0;
@@ -35,7 +36,7 @@ MQTTClient client;
 
 /* NeoPixel stuff -----*/
 #define NUMPIXELS1      14 // number of LEDs on ring
-#define BRIGHTNESS      30 // Max brightness of NeoPixels
+#define BRIGHTNESS      255 // Max brightness of NeoPixels
 #define SPARKLE_SPEED   85 // Speed at which sparkles animate
 unsigned long patternInterval = 20 ; // time between steps in the pattern
 unsigned long animationSpeed [] = { SPARKLE_SPEED } ; // speed for each animation (order counts!)
@@ -297,7 +298,7 @@ bool resetWiFi(){
   // start portal w delay
   Serial.println("Starting config portal");
   wm.setConfigPortalTimeout(120);      
-  if (!wm.startConfigPortal(CLIENT_ID,"password")) {
+  if (!wm.startConfigPortal(CLIENT_ID,"doobeedoo")) {
     Serial.println("failed to connect or hit timeout");
     delay(3000);
     return false;

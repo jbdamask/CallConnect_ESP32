@@ -10,7 +10,7 @@ This is a quickly evolving example. It combines several common libraries to cont
 
 * [Adafruit Feather HUZZAH ESP32](https://www.adafruit.com/product/3405)
 * RGB NeoPixels (I'm using an [Adafruit NeoPixel Ring](https://www.adafruit.com/product/1643))
-* [Button](https://www.adafruit.com/product/1119)
+* [Buttons](https://www.adafruit.com/product/1119)
 * MicroUSB cable for flashing board
 
 ### Libraries
@@ -18,7 +18,7 @@ This is a quickly evolving example. It combines several common libraries to cont
 * WiFIManager - As of January 31, 2019 this _must_ be the [development branch](https://github.com/tzapu/WiFiManager/tree/development) in order for ESP32 boards to work
 * [WiFiClientSecure](https://github.com/espressif/arduino-esp32/tree/master/libraries/WiFiClientSecure)
 * [AceButton](https://github.com/bxparks/AceButton)
-* [Adafruit NeoPixel](https://github.com/adafruit/Adafruit_NeoPixel)
+* [NeoPixelBus](https://github.com/Makuna/NeoPixelBus/wiki)
 * [Arduino-mqtt](https://github.com/256dpi/arduino-mqtt)
 * [ArduinoJSON](https://arduinojson.org/)
 
@@ -38,3 +38,4 @@ This is a quickly evolving example. It combines several common libraries to cont
 * [Brian Park](https://github.com/bxparks) for AceButton
 * [AWS IoT](https://aws.amazon.com/iot/?nc=sn&loc=0)
 * [These dudes](https://github.com/bblanchon/ArduinoJson/graphs/contributors) for the ArduinoJSON library
+* Michael Miller for NeoPixelBus library

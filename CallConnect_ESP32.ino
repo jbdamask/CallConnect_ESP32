@@ -35,7 +35,7 @@ MQTTClient client;
 #define JSON_BUFFER_SIZE  512
 
 /* NeoPixel stuff -----*/
-#define NUMPIXELS1      14 // number of LEDs on ring
+// Number of pixels in Config.h
 #define BRIGHTNESS      255 // Max brightness of NeoPixels
 #define SPARKLE_SPEED   85 // Speed at which sparkles animate
 unsigned long patternInterval = 20 ; // time between steps in the pattern

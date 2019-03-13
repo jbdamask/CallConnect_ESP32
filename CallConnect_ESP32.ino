@@ -65,7 +65,7 @@ MyAnimationState animationState[AnimationChannels];
 
 /* States (1,2,3) ---*/
 uint8_t state = 0, previousState = 0;
-unsigned long lastUpdate = 0, idleTimer = 0; // for millis() when last update occurred
+unsigned long lastUpdate = 0, idleTimer = 0, resetTimer = 0; // for millis() when last update occurred
 
 /* Timing stuff -----*/
 long countDown = 0;  // Counts down a certain number of seconds before taking action (for certain states)
@@ -312,8 +312,9 @@ bool resetWiFi(){
 }
 
 void connect(){
-    awsConnect();
+    awsConnect(); // @TODO - check return value and act on failure
     mqttTopicSubscribe();
+    publish("Online");
 }
 
 bool awsConnect(){
@@ -457,6 +458,8 @@ void setup() {
     }
 
     connect();
+
+    resetTimer = millis();  // Start the reset countdown
 }
 
 void loop(){
@@ -479,6 +482,7 @@ void loop(){
       strip.Show();
       previousState = state;
       isOff = (state == 0) ? true : false;
+      resetTimer = millis();  // If state change is registered, things are working. Reset the timer
   }
 
 
@@ -492,6 +496,10 @@ void loop(){
         makingCall = true;
         Serial.println("Calling...");
         idleTimer = millis();
+      } else {  // If nothing going on, and nothing has gone on for a while, proactively restart the chip
+        if(millis() - resetTimer > RESET_AFTER){
+          esp_restart();
+        }
       }
       break;
     case 1: // calling

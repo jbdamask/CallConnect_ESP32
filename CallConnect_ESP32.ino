@@ -14,6 +14,7 @@
 #include <ArduinoJson.h>
 #include "AceButton.h"
 #include "Config.h"
+#include "certificates.h"
 using namespace ace_button;
 
 /* Pins -----*/

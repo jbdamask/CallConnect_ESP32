@@ -498,7 +498,8 @@ void loop(){
         idleTimer = millis();
       } else {  // If nothing going on, and nothing has gone on for a while, proactively restart the chip
         if(millis() - resetTimer > RESET_AFTER){
-          esp_restart();
+          //esp_restart();
+          ESP.restart();
         }
       }
       break;

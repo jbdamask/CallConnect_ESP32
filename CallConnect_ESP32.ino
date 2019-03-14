@@ -120,13 +120,17 @@ void handleStateEvent(AceButton* /* button */, uint8_t eventType,
       Serial.println("Button Held");
       Serial.println("Erasing Config, restarting");
       //isTouched = true;     
-      state = 0;        // TODO - what should the state be in this case?
+      //state = 0;        // TODO - what should the state be in this case?
+      state = 4;
       isOff = true;   // Turn off NeoPixels
       res = false;  // Reset WiFi to false since we want AP
       if(resetWiFi()){
         if(awsConnect){
           if(!mqttTopicSubscribe){
             Serial.println("CRITICAL ERROR: Couldn't connect to MQTT topic");
+          } else {
+            // All good, set state back to 0
+            state = 0;
           }
         }else {
           Serial.println("CRITICAL ERROR: Couldn't connect to AWS");
@@ -202,10 +206,13 @@ void breathe(int breatheColor){
   switch(breatheColor){
     case 1:
       c = RgbColor(0, 127, 127);  // Light blue
-    break;
+      break;
     case 2:
       c = RgbColor(255, 0, 0);    // Red
-    break;
+      break;
+    case 3: 
+      c = RgbColor(255, 215, 0);  // Gold
+      break;
     
     if (animations.IsAnimating())
     {
@@ -297,9 +304,12 @@ bool resetWiFi(){
 }
 
 void connect(){
-    awsConnect(); // @TODO - check return value and act on failure
+    if(!awsConnect()){ // Return immediately if we can't connect to AWS
+      return;
+    } 
     mqttTopicSubscribe();
     publish("Online");
+    state = 0;
 }
 
 bool awsConnect(){
@@ -405,6 +415,10 @@ void  updatePattern(int pat){
       Serial.println("State 3");
       breathe(2); // Breathe red
       break;
+    case 4:
+      Serial.println("State 4");
+      breathe(3); // Breathe gold
+      break;
     default:
       // donada
       break;
@@ -427,6 +441,9 @@ void setup() {
     updatePattern(state);
 
     Serial.println("Trying to reconnect to wifi...");
+    // Set this in order for loop() to keep running
+    wm.setConfigPortalBlocking(false);
+
     // Initiatize WiFiManager
     res = wm.autoConnect(CLIENT_ID, AP_PASSWORD); // password protected ap
     wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
@@ -434,6 +451,7 @@ void setup() {
     // Seeing if we can re-connect to known WiFi
     if(!res) {
         Serial.println("Failed to connect or hit timeout");
+        state = 4;  // Show SoftAP animation
         //wm.resetSettings(); // Uncomment for debugging
         //ESP.restart();
     } 
@@ -448,6 +466,7 @@ void setup() {
 }
 
 void loop(){
+  wm.process(); // Needed for loop to run when WiFiManager is in SoftAP mode
   // Make sure we're still connected
   if(!client.connected()){
     connect();
@@ -473,7 +492,7 @@ void loop(){
   // The various cases we can face
   switch (state){
     case 0: // idle 
-      if(isTouched){
+      if(isTouched && state != 4){ // Only register touch event if we're not in SoftAP mode
         state = 1;
         publish(String(state));   // TODO - make sure String is the right type for state in the payload
         previouslyTouched = true;
@@ -542,6 +561,15 @@ void loop(){
           publish("2");
           previouslyTouched = true;
       }    
+      break;
+    case 4: // SoftAP
+      if (animations.IsAnimating()){
+          // the normal loop just needs these two to run the active animations
+          animations.UpdateAnimations();
+          strip.Show();
+      } else {
+          FadeInFadeOutRinseRepeat(RgbColor(255,215,0));
+      }  
       break;
     default:
       resetState();

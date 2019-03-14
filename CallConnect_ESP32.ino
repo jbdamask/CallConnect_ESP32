@@ -97,10 +97,13 @@ void buttonSetup(){
     buttonStateConfig.setClickDelay(75);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureClick);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureRepeatPress);
+    buttonStateConfig.setFeature(ButtonConfig::kFeatureLongPress);
+    buttonStateConfig.setLongPressDelay(10000);
     // These suppressions not really necessary but cleaner.
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterClick);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterRepeatPress);
-   
+    buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);  
+
     buttonAPConfig.setEventHandler(handleAPEvent);
     buttonAPConfig.setFeature(ButtonConfig::kFeatureLongPress);
     buttonAPConfig.setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);  
@@ -123,6 +126,25 @@ void resetState(){
 void handleStateEvent(AceButton* /* button */, uint8_t eventType,
     uint8_t buttonState) {
   switch (eventType) {
+    case AceButton::kEventLongPressed:
+      Serial.println("Button Held");
+      Serial.println("Erasing Config, restarting");
+      //isTouched = true;     
+      state = 0;        // TODO - what should the state be in this case?
+      isOff = true;   // Turn off NeoPixels
+      res = false;  // Reset WiFi to false since we want AP
+      if(resetWiFi()){
+        if(awsConnect){
+          if(!mqttTopicSubscribe){
+            Serial.println("CRITICAL ERROR: Couldn't connect to MQTT topic");
+          }
+        }else {
+          Serial.println("CRITICAL ERROR: Couldn't connect to AWS");
+        }        
+      }else{
+        Serial.println("CRITICAL ERROR: Couldn't connect to wifi");
+      }     
+      break;    
     case AceButton::kEventReleased:
       Serial.println("single click");
       isTouched = true;     
@@ -299,7 +321,7 @@ bool resetWiFi(){
   // start portal w delay
   Serial.println("Starting config portal");
   wm.setConfigPortalTimeout(120);      
-  if (!wm.startConfigPortal(CLIENT_ID,"doobeedoo")) {
+  if (!wm.startConfigPortal(CLIENT_ID, AP_PASSWORD)) {
     Serial.println("failed to connect or hit timeout");
     delay(3000);
     return false;
@@ -443,7 +465,7 @@ void setup() {
 
     Serial.println("Trying to reconnect to wifi...");
     // Initiatize WiFiManager
-    res = wm.autoConnect(CLIENT_ID,"password"); // password protected ap
+    res = wm.autoConnect(CLIENT_ID, AP_PASSWORD); // password protected ap
     wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
 
     // Seeing if we can re-connect to known WiFi

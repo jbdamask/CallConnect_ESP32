@@ -78,7 +78,6 @@ bool res;       // Boolean letting us know if we can connect to saved WiFi
 ButtonConfig buttonStateConfig;
 AceButton buttonState(&buttonStateConfig);
 void handleStateEvent(AceButton*, uint8_t, uint8_t); // function prototype for state button
-void handleAPEvent(AceButton*, uint8_t, uint8_t); // function prototype for access point button
 bool isTouched = false;
 bool previouslyTouched = false;
 bool makingCall = false;    // Keep track of who calls and who receives
@@ -143,33 +142,6 @@ void handleStateEvent(AceButton* /* button */, uint8_t eventType,
       break;
   }
 }
-
-// The event handler for the WiFi Access Point button.
-void handleAPEvent(AceButton* /* button */, uint8_t eventType,
-    uint8_t buttonState) {
-  switch (eventType) {
-    case AceButton::kEventLongPressed:
-      Serial.println("Button Held");
-      Serial.println("Erasing Config, restarting");
-      //isTouched = true;     
-      state = 0;        // TODO - what should the state be in this case?
-      isOff = true;   // Turn off NeoPixels
-      res = false;  // Reset WiFi to false since we want AP
-      if(resetWiFi()){
-        if(awsConnect){
-          if(!mqttTopicSubscribe){
-            Serial.println("CRITICAL ERROR: Couldn't connect to MQTT topic");
-          }
-        }else {
-          Serial.println("CRITICAL ERROR: Couldn't connect to AWS");
-        }        
-      }else{
-        Serial.println("CRITICAL ERROR: Couldn't connect to wifi");
-      }     
-      break;
-  }
-}
-
 
 // simple blend function
 void BlendAnimUpdate(const AnimationParam& param)

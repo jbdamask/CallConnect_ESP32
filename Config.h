@@ -7,5 +7,6 @@ const char *subscribeTopic = "<topic>"; // Can be changed to shadow topics...
 const char *publishTopic = "<topic>";
 const long RESET_AFTER = 21600000;  // 6 hours
 //const long RESET_AFTER = 10000;  // 10 seconds (debug)
+const char *AP_PASSWORD = "<enter your pw here>";
 #define NUMPIXELS1      16 // number of LEDs 
 

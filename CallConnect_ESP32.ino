@@ -19,7 +19,6 @@ using namespace ace_button;
 
 /* Pins -----*/
 #define PIN_STATE     27    // Button pin for changing state
-#define PIN_SOFTAP    13    // Button pin for reconfiguring WiFiManager
 #define PIN_NEOPIXEL   12    // pin connected to the small NeoPixels strip
 
 
@@ -78,8 +77,6 @@ bool res;       // Boolean letting us know if we can connect to saved WiFi
 /* Button stuff -----*/
 ButtonConfig buttonStateConfig;
 AceButton buttonState(&buttonStateConfig);
-ButtonConfig buttonAPConfig;
-AceButton buttonAP(&buttonAPConfig);
 void handleStateEvent(AceButton*, uint8_t, uint8_t); // function prototype for state button
 void handleAPEvent(AceButton*, uint8_t, uint8_t); // function prototype for access point button
 bool isTouched = false;
@@ -104,14 +101,8 @@ void buttonSetup(){
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterRepeatPress);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);  
 
-    buttonAPConfig.setEventHandler(handleAPEvent);
-    buttonAPConfig.setFeature(ButtonConfig::kFeatureLongPress);
-    buttonAPConfig.setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);  
-
-    pinMode(PIN_SOFTAP, INPUT_PULLUP);    // Use built in pullup resistor
     pinMode(PIN_STATE, INPUT_PULLUP);     // Use built in pullup resistor
     buttonState.init(PIN_STATE, HIGH, 0 /* id */);
-    buttonAP.init(PIN_SOFTAP, HIGH, 1 /* id */);
 }
 
 // Clean house
@@ -493,7 +484,6 @@ void loop(){
 
   bool static toldUs = false; // When in state 1, we're either making or receiving a call
   isTouched = false;  // Reset unless there's a touch event
-  buttonAP.check();
   buttonState.check();
 
   /* Act on state change */

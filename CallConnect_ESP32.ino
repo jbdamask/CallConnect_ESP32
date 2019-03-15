@@ -48,9 +48,18 @@ uint8_t myFavoriteColors[][3] = {{200,   0, 200},   // purple
                                };
 #define FAVCOLORS sizeof(myFavoriteColors) / 3
 bool isOff = true;  // NeoPixel on/off toggle
+// Stuff for light ring effects
+const uint16_t AnimCount = 1; // we only need one
+const uint16_t TailLength = 6; // length of the tail, must be shorter than PixelCount
+const float MaxLightness = 0.4f; // max lightness at the head of the tail (0.5f is full bright)
+NeoGamma<NeoGammaTableMethod> colorGamma; // for any fade animations, best to correct gamma
+// Let er rip
 NeoPixelBrightnessBus<NeoGrbFeature, Neo800KbpsMethod> strip(NUMPIXELS1, PIN_NEOPIXEL);
 const uint8_t AnimationChannels = 1; // we only need one as all the pixels are animated at once for breathing
 NeoPixelAnimator animations(AnimationChannels); // NeoPixel animation management object
+
+NeoPixelAnimator ringAnimation(AnimationChannels); // NeoPixel animation management object
+
 boolean fadeToColor = true;  // general purpose variable used to store effect state
 // what is stored for state is specific to the need, in this case, the colors.
 // basically what ever you need inside the animation update function
@@ -77,19 +86,27 @@ bool res;       // Boolean letting us know if we can connect to saved WiFi
 /* Button stuff -----*/
 ButtonConfig buttonStateConfig;
 AceButton buttonState(&buttonStateConfig);
-void handleStateEvent(AceButton*, uint8_t, uint8_t); // function prototype for state button
+void handleButtonPush(AceButton*, uint8_t, uint8_t); // function prototype for state button
 bool isTouched = false;
 bool previouslyTouched = false;
 bool makingCall = false;    // Keep track of who calls and who receives
 
-/* ================================== *
-*   Function definitions              *
-*  ================================== */
+/* Clean house -----*/
+void resetState(){
+  state = 0;
+  previouslyTouched = false;
+  makingCall = false;
+  publish(String(state));
+}
+
+/*  ====================================================================  *
+*                               BUTTON                                    *
+*   ====================================================================  */
 
 void buttonSetup(){
   // Configs for the buttons. Need Released event to change the state,
   // and LongPressed to go into SoftAP mode. Don't need Clicked.
-    buttonStateConfig.setEventHandler(handleStateEvent);
+    buttonStateConfig.setEventHandler(handleButtonPush);
     buttonStateConfig.setClickDelay(75);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureClick);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureRepeatPress);
@@ -99,42 +116,24 @@ void buttonSetup(){
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterClick);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterRepeatPress);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterLongPress);  
-
     pinMode(PIN_STATE, INPUT_PULLUP);     // Use built in pullup resistor
     buttonState.init(PIN_STATE, HIGH, 0 /* id */);
 }
 
-// Clean house
-void resetState(){
-  state = 0;
-  previouslyTouched = false;
-  makingCall = false;
-  publish(String(state));
-}
-
 // The event handler for the state change button.
-void handleStateEvent(AceButton* /* button */, uint8_t eventType,
+void handleButtonPush(AceButton* /* button */, uint8_t eventType,
     uint8_t buttonState) {
   switch (eventType) {
     case AceButton::kEventLongPressed:
       Serial.println("Button Held");
       Serial.println("Erasing Config, restarting");
-      //isTouched = true;     
-      //state = 0;        // TODO - what should the state be in this case?
-      state = 4;
+      state = 4;  // This will show animation alerting user to access point mode
       isOff = true;   // Turn off NeoPixels
       res = false;  // Reset WiFi to false since we want AP
       if(resetWiFi()){
         if(awsConnect){
-          if(!mqttTopicSubscribe){
-            Serial.println("CRITICAL ERROR: Couldn't connect to MQTT topic");
-          } else {
-            // All good, set state back to 0
-            state = 0;
-          }
-        }else {
-          Serial.println("CRITICAL ERROR: Couldn't connect to AWS");
-        }        
+            state = 5;
+        }      
       }else{
         Serial.println("CRITICAL ERROR: Couldn't connect to wifi");
       }     
@@ -142,14 +141,16 @@ void handleStateEvent(AceButton* /* button */, uint8_t eventType,
     case AceButton::kEventReleased:
       Serial.println("single click");
       isTouched = true;     
-      //state = 1;
       break;
   }
 }
 
+/*  ====================================================================  *
+*                               ANIMATIONS                                *
+*   ====================================================================  */
+
 // simple blend function
-void BlendAnimUpdate(const AnimationParam& param)
-{
+void BlendAnimUpdate(const AnimationParam& param){
     // this gets called for each animation on every time step
     // progress will start at 0.0 and end at 1.0
     // we use the blend function on the RgbColor to mix
@@ -167,8 +168,7 @@ void BlendAnimUpdate(const AnimationParam& param)
     }
 }
 
-void FadeInFadeOutRinseRepeat(RgbColor myColor)
-{
+void FadeInFadeOutRinseRepeat(RgbColor myColor){
     if (fadeToColor)
     {
         // Fade upto a random color
@@ -271,128 +271,54 @@ void sparkle(uint8_t howmany) {
   lastUpdate = millis();
 }
 
+// LED ring
+void roundy(float hue){
+    // Initialize if we're not already animating
+    if(!animations.IsAnimating()){
+      DrawTailPixels(hue);
+      //animations.StartAnimation(0, 66, LoopAnimUpdate); 
+      ringAnimation.StartAnimation(0,66, LoopAnimUpdate);
+    } 
+}
+
+// Used by Roundy
+void DrawTailPixels(float hue){
+    // using Hsl as it makes it easy to pick from similiar saturated colors
+    //float hue = random(360) / 360.0f;  
+    for (uint16_t index = 0; index < strip.PixelCount() && index <= TailLength; index++)
+    {
+        float lightness = index * MaxLightness / TailLength;
+        RgbColor color = HslColor(hue, 1.0f, lightness);
+
+        strip.SetPixelColor(index, colorGamma.Correct(color));
+    }
+}
+
+// Used by Roundy
+void LoopAnimUpdate(const AnimationParam& param){
+    // wait for this animation to complete,
+    // we are using it as a timer of sorts
+    if (param.state == AnimationState_Completed)
+    {
+        // done, time to restart this position tracking animation/timer
+        //animations.RestartAnimation(param.index);
+        ringAnimation.RestartAnimation(param.index);
+
+        // rotate the complete strip one pixel to the right on every update
+        strip.RotateRight(1);
+    }
+}
+
 // clear all LEDs
 void wipe(){
   for(int i = 0; i <= NUMPIXELS1; i++){
     strip.SetPixelColor(i, RgbColor(0,0,0));
   }
-  //  for(int i=0;i<=strip.numPixels();i++){
-  //    strip.setPixelColor(i, strip.Color(0,0,0));
-  //  }
 }
 
 // set brightness back to default
 void resetBrightness(){
-    // strip.setBrightness(BRIGHTNESS);
     strip.SetBrightness(BRIGHTNESS);
-}
-
-bool resetWiFi(){
-  wm.resetSettings();
-  ESP.restart();
-  // start portal w delay
-  Serial.println("Starting config portal");
-  wm.setConfigPortalTimeout(120);      
-  if (!wm.startConfigPortal(CLIENT_ID, AP_PASSWORD)) {
-    Serial.println("failed to connect or hit timeout");
-    delay(3000);
-    return false;
-  } else {
-    //if you get here you have connected to the WiFi
-    Serial.println("connected...yeey :)");
-    res = true;
-    return true;
-  } 
-}
-
-void connect(){
-    if(!awsConnect()){ // Return immediately if we can't connect to AWS
-      return;
-    } 
-    mqttTopicSubscribe();
-    //publish("Online");
-    state = 5;
-    countDown = millis();   // Set the timer so we show the animation for the right amount of time
-    //state = 0;
-}
-
-bool awsConnect(){
-  static int awsConnectTimer = 0;
-  int awsConnectTimout = 10000;
-  net.setCACert(rootCABuff);
-  net.setCertificate(certificateBuff);
-  net.setPrivateKey(privateKeyBuff);
-  client.begin(awsEndPoint, 8883, net);
-
-  Serial.print("\nConnecting to AWS MQTT broker");
-  while (!client.connect(CLIENT_ID)) {
-    if(awsConnectTimer == 0) awsConnectTimer = millis();
-    if (millis() - awsConnectTimer > awsConnectTimout) {
-      Serial.println("CONNECTION FAILURE: Could not connect to aws");
-      return false;
-    }
-    Serial.print(".");
-    delay(100);
-  }
-  Serial.println("Connected to AWS"); 
-  awsConnectTimer = 0;
-
-  return true;
-
-}
-
-bool mqttTopicSubscribe(){
-  client.subscribe(subscribeTopic);
-  client.onMessage(messageReceived);
-}
-
-void publish(String state){ // Isn't state global? If so, no need to pass
-  char msg[50];
-  static int value = 0;
-  int NUM_RETRIES = 10;
-  int cnt = 0;
-  Serial.println("Function: publish()");
-  StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
-  root["thing_name"] = String(CLIENT_ID);
-  root["state"] = state;
-  //Serial.println("    Created the object. Now print to json");
-  String sJson = "";
-  root.printTo(sJson);
-  char* cJson = &sJson[0u];
-  if(!client.connected()){
-    Serial.println("PUBLISH ERROR: Client not connected");
-  }
-  if(!client.publish(publishTopic, cJson)){
-   Serial.println("PUBLISH ERROR: Publish failed");
-   Serial.print("  Topic: "); Serial.println(publishTopic);
-   Serial.print("  Message: "); Serial.println(cJson);
-  }
-}
-
-
-// AWS MQTT callback handler
-void messageReceived(String &topic, String &payload) {
-  Serial.println("incoming: " + topic + " - " + payload);
-    StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-    JsonObject& root = jsonBuffer.parseObject(payload);
-    const char* d = root["thing_name"];
-    const char* s = root["state"];    
-    Serial.println(String(d));
-    if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
-    Serial.println("    Message is from another device. Printing...");
-    Serial.print("State value: "); Serial.println(s);
-
-    if(strcmp(s,"0")==0){  
-        state = 0;
-    }else if(strcmp(s,"1")==0){
-        state = 1;
-    }else if(strcmp(s,"2")==0){
-        state = 2;
-    }else if(strcmp(s,"3")==0){
-        state = 3;
-        countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
-    }    
 }
 
 // Update the animation
@@ -427,6 +353,119 @@ void  updatePattern(int pat){
       // donada
       break;
   }  
+}
+
+/*  ====================================================================  *
+*                               NETWORKING                                *
+*   ====================================================================  */
+
+// Clears memory of any previously joined networks and starts access point
+bool resetWiFi(){
+  wm.resetSettings();
+  ESP.restart();
+  // start portal w delay
+  Serial.println("Starting config portal");
+  wm.setConfigPortalTimeout(120);      
+  if (!wm.startConfigPortal(CLIENT_ID, AP_PASSWORD)) {
+    Serial.println("failed to connect or hit timeout");
+    delay(3000);
+    return false;
+  } else {
+    //if you get here you have connected to the WiFi
+    Serial.println("connected...yeey :)");
+    res = true;
+    return true;
+  } 
+}
+
+void connect(){
+    if(!awsConnect()){ // Return immediately if we can't connect to AWS
+      return;
+    } 
+    mqttTopicSubscribe();
+    state = 5;  // Animation tied to this state shows user we're good to go
+    countDown = millis();   // Set the timer so we show the animation for the right amount of time
+}
+
+bool awsConnect(){
+  static int awsConnectTimer = 0;
+  int awsConnectTimout = 10000;
+  net.setCACert(rootCABuff);
+  net.setCertificate(certificateBuff);
+  net.setPrivateKey(privateKeyBuff);
+  client.begin(awsEndPoint, 8883, net);
+
+  Serial.print("\nConnecting to AWS MQTT broker");
+  while (!client.connect(CLIENT_ID)) {
+    if(awsConnectTimer == 0) awsConnectTimer = millis();
+    if (millis() - awsConnectTimer > awsConnectTimout) {
+      Serial.println("CONNECTION FAILURE: Could not connect to aws");
+      return false;
+    }
+    Serial.print(".");
+    delay(100);
+  }
+  Serial.println("Connected to AWS"); 
+  awsConnectTimer = 0;
+  if(!client.subscribe(subscribeTopic)) {
+    Serial.println("CONNECTION FAILURE: Could not subscribe to MQTT topic");
+    return false;
+  }
+  client.onMessage(messageReceived);
+  return true;
+
+}
+
+bool mqttTopicSubscribe(){
+
+}
+
+void publish(String state){ // Isn't state global? If so, no need to pass
+  char msg[50];
+  static int value = 0;
+  int NUM_RETRIES = 10;
+  int cnt = 0;
+  Serial.println("Function: publish()");
+  StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  root["thing_name"] = String(CLIENT_ID);
+  root["state"] = state;
+  //Serial.println("    Created the object. Now print to json");
+  String sJson = "";
+  root.printTo(sJson);
+  char* cJson = &sJson[0u];
+  if(!client.connected()){
+    Serial.println("PUBLISH ERROR: Client not connected");
+  }
+  if(!client.publish(publishTopic, cJson)){
+   Serial.println("PUBLISH ERROR: Publish failed");
+   Serial.print("  Topic: "); Serial.println(publishTopic);
+   Serial.print("  Message: "); Serial.println(cJson);
+  }
+}
+
+// AWS MQTT callback handler
+void messageReceived(String &topic, String &payload) {
+  Serial.println("incoming: " + topic + " - " + payload);
+    StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+    JsonObject& root = jsonBuffer.parseObject(payload);
+    const char* d = root["thing_name"];
+    const char* s = root["state"];    
+    Serial.println(String(d));
+    if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
+    Serial.println("    Message is from another device. Printing...");
+    Serial.print("State value: "); Serial.println(s);
+
+    if(strcmp(s,"0")==0){  
+        state = 0;
+    }else if(strcmp(s,"1")==0){
+        state = 1;
+    }else if(strcmp(s,"2")==0){
+        state = 2;
+    }else if(strcmp(s,"3")==0){
+        state = 3;
+        countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
+    }    
 }
 
 
@@ -535,6 +574,7 @@ void loop(){
           animations.UpdateAnimations();
           strip.Show();
       } else {
+          Serial.println("Starting to breathe cyan");
           FadeInFadeOutRinseRepeat(RgbColor(0,127,127));
       }
       if(isTouched){    // Touch again to disconnect
@@ -554,6 +594,7 @@ void loop(){
           animations.UpdateAnimations();
           strip.Show();
       } else {
+          Serial.println("Starting to breathe red");
           FadeInFadeOutRinseRepeat(RgbColor(255,0,0));
       }    
       if(millis() - countDown > IDLE_TIMEOUT) {
@@ -567,21 +608,29 @@ void loop(){
       }    
       break;
     case 4: // SoftAP
-      if (animations.IsAnimating()){
+      //if (animations.IsAnimating()){
+      if(ringAnimation.IsAnimating()){
           // the normal loop just needs these two to run the active animations
-          animations.UpdateAnimations();
+          //animations.UpdateAnimations();
+          ringAnimation.UpdateAnimations();
           strip.Show();
       } else {
-          FadeInFadeOutRinseRepeat(RgbColor(255,215,0));
+        //FadeInFadeOutRinseRepeat(RgbColor(255,215,0));
+        float hue = 51/360.0f;
+        roundy(hue); // Hue of 120 is green
       }  
       break;
     case 5: // Connection success
-      if(animations.IsAnimating()){
+      //if(animations.IsAnimating()){
+      if(ringAnimation.IsAnimating()){
         // the normal loop just needs these two to run the active animations
-        animations.UpdateAnimations();
+        //animations.UpdateAnimations();
+        ringAnimation.UpdateAnimations();
         strip.Show();
       } else {
-        FadeInFadeOutRinseRepeat(RgbColor(0, 200, 0));
+        //FadeInFadeOutRinseRepeat(RgbColor(0, 200, 0));
+        float hue = 120/360.0f;
+        roundy(hue); // Hue of 120 is green
       }
       if(millis() - countDown > (IDLE_TIMEOUT-2)) { // Show we're connected for just a few seconds
         Serial.println("State 5. Timed out. Moving to State 0");

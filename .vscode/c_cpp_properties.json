@@ -3,6 +3,7 @@
         {
             "name": "Mac",
             "includePath": [
+                "/Users/johndamask/Library/Arduino15/packages/esp32/hardware/esp32/1.0.1/**",
                 "/Users/johndamask/Library/Arduino15/packages/esp32/tools/**",
                 "/Users/johndamask/Library/Arduino15/packages/esp32/hardware/esp32/1.0.0/**",
                 "/Users/johndamask/Documents/Arduino/libraries/**"

@@ -320,7 +320,7 @@ bool awsConnect(){
   net.setPrivateKey(privateKeyBuff);
   client.begin(awsEndPoint, 8883, net);
 
-  Serial.print("\nConnecting to AWS");
+  Serial.print("\nConnecting to AWS MQTT broker");
   while (!client.connect(CLIENT_ID)) {
     if(awsConnectTimer == 0) awsConnectTimer = millis();
     if (millis() - awsConnectTimer > awsConnectTimout) {
@@ -330,7 +330,6 @@ bool awsConnect(){
     Serial.print(".");
     delay(100);
   }
-
   Serial.println("Connected to AWS"); 
   awsConnectTimer = 0;
 
@@ -343,7 +342,7 @@ bool mqttTopicSubscribe(){
   client.onMessage(messageReceived);
 }
 
-void publish(String state){
+void publish(String state){ // Isn't state global? If so, no need to pass
   char msg[50];
   static int value = 0;
 
@@ -358,7 +357,6 @@ void publish(String state){
   String sJson = "";
   root.printTo(sJson);
   char* cJson = &sJson[0u];
- 
   if(!client.connected()){
     Serial.println("PUBLISH ERROR: Client not connected");
   }
@@ -367,8 +365,8 @@ void publish(String state){
    Serial.print("  Topic: "); Serial.println(publishTopic);
    Serial.print("  Message: "); Serial.println(cJson);
   }
-
 }
+
 
 // AWS MQTT callback handler
 void messageReceived(String &topic, String &payload) {

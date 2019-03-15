@@ -213,7 +213,9 @@ void breathe(int breatheColor){
     case 3: 
       c = RgbColor(255, 215, 0);  // Gold
       break;
-    
+    case 4:
+      c = RgbColor(0, 200, 0); // Greenish
+      break;
     if (animations.IsAnimating())
     {
         // the normal loop just needs these two to run the active animations
@@ -308,8 +310,10 @@ void connect(){
       return;
     } 
     mqttTopicSubscribe();
-    publish("Online");
-    state = 0;
+    //publish("Online");
+    state = 5;
+    countDown = millis();   // Set the timer so we show the animation for the right amount of time
+    //state = 0;
 }
 
 bool awsConnect(){
@@ -345,7 +349,6 @@ bool mqttTopicSubscribe(){
 void publish(String state){ // Isn't state global? If so, no need to pass
   char msg[50];
   static int value = 0;
-
   int NUM_RETRIES = 10;
   int cnt = 0;
   Serial.println("Function: publish()");
@@ -417,6 +420,9 @@ void  updatePattern(int pat){
       Serial.println("State 4");
       breathe(3); // Breathe gold
       break;
+    case 5:
+      Serial.println("State 5");
+      breathe(4); // Breathe greenish
     default:
       // donada
       break;
@@ -568,6 +574,19 @@ void loop(){
       } else {
           FadeInFadeOutRinseRepeat(RgbColor(255,215,0));
       }  
+      break;
+    case 5: // Connection success
+      if(animations.IsAnimating()){
+        // the normal loop just needs these two to run the active animations
+        animations.UpdateAnimations();
+        strip.Show();
+      } else {
+        FadeInFadeOutRinseRepeat(RgbColor(0, 200, 0));
+      }
+      if(millis() - countDown > (IDLE_TIMEOUT-2)) { // Show we're connected for just a few seconds
+        Serial.println("State 5. Timed out. Moving to State 0");
+        resetState();
+      }
       break;
     default:
       resetState();

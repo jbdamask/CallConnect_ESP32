@@ -1,11 +1,11 @@
-const char *CLIENT_ID= "feather_esp32_4";
-const char *awsEndPoint = "a2i4zihblrm3ge-ats.iot.us-east-1.amazonaws.com";
-const char *subscribeTopic = "lights"; // Can be changed to shadow topics...
-const char *publishTopic = "lights";
+// Stuff for AWS IoT 
+
+
+const char *CLIENT_ID= "<name>";
+const char *awsEndPoint = "<iotendpoint>";
+const char *subscribeTopic = "<topic>"; // Can be changed to shadow topics...
+const char *publishTopic = "<topic>";
 const long RESET_AFTER = 21600000;  // 6 hours
-//const long RESET_AFTER = 10000;  // 10 seconds (debug)
-const char *AP_PASSWORD = "doobeedoo";
-#define NUMPIXELS1      20 // number of LEDs 
-
-
+const long LONG_PRESS_DURATION = 5000; // Used for long button push to restart the ESP chip
+#define NUMPIXELS1      16 // number of LEDs 
 

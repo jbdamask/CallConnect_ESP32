@@ -1,7 +1,0 @@
-{
-    "board": "esp32:esp32:featheresp32",
-    "configuration": "FlashFreq=80,UploadSpeed=921600,DebugLevel=none",
-    "sketch": "CallConnect_ESP32.ino",
-    "output": "../build",
-    "port": "/dev/cu.SLAB_USBtoUART"
-}

@@ -373,7 +373,6 @@ void connect(){
     if(!awsConnect()){ // Return immediately if we can't connect to AWS
       return;
     } 
-    mqttTopicSubscribe();
     state = 5;  // Animation tied to this state shows user we're good to go
     countDown = millis();   // Set the timer so we show the animation for the right amount of time
 }
@@ -385,7 +384,6 @@ bool awsConnect(){
   net.setCertificate(certificateBuff);
   net.setPrivateKey(privateKeyBuff);
   client.begin(awsEndPoint, 8883, net);
-
   Serial.print("\nConnecting to AWS MQTT broker");
   while (!client.connect(CLIENT_ID)) {
     if(awsConnectTimer == 0) awsConnectTimer = millis();
@@ -398,15 +396,14 @@ bool awsConnect(){
   }
   Serial.println("Connected to AWS"); 
   awsConnectTimer = 0;
+  // Now subscribe to MQTT topic
   if(!client.subscribe(subscribeTopic)) {
     Serial.println("CONNECTION FAILURE: Could not subscribe to MQTT topic");
     return false;
   }
   client.onMessage(messageReceived);
   return true;
-
 }
-
 
 void publish(String state){ // Isn't state global? If so, no need to pass
   char msg[50];

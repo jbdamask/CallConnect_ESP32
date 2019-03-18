@@ -8,6 +8,8 @@ This is a quickly evolving example. It combines several common libraries to cont
 
 Edit Config.h.example and certificates.h.example to meet your specific needs and save as Config.h and certificates.h
 
+Others can ignore 
+
 ### Hardware
 
 * [Adafruit Feather HUZZAH ESP32](https://www.adafruit.com/product/3405)

@@ -87,6 +87,7 @@ bool res;       // Boolean letting us know if we can connect to saved WiFi
 ButtonConfig buttonStateConfig;
 AceButton buttonState(&buttonStateConfig);
 void handleButtonPush(AceButton*, uint8_t, uint8_t); // function prototype for state button
+
 bool isTouched = false;
 bool previouslyTouched = false;
 bool makingCall = false;    // Keep track of who calls and who receives
@@ -108,10 +109,10 @@ void buttonSetup(){
   // and LongPressed to go into SoftAP mode. Don't need Clicked.
     buttonStateConfig.setEventHandler(handleButtonPush);
     buttonStateConfig.setClickDelay(75);
-    buttonStateConfig.setFeature(ButtonConfig::kFeatureClick);
+   buttonStateConfig.setFeature(ButtonConfig::kFeatureClick);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureRepeatPress);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureLongPress);
-    buttonStateConfig.setLongPressDelay(10000);
+    buttonStateConfig.setLongPressDelay(LONG_PRESS_DURATION);
     // These suppressions not really necessary but cleaner.
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterClick);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureSuppressAfterRepeatPress);
@@ -126,17 +127,20 @@ void handleButtonPush(AceButton* /* button */, uint8_t eventType,
   switch (eventType) {
     case AceButton::kEventLongPressed:
       Serial.println("Button Held");
-      Serial.println("Erasing Config, restarting");
-      state = 4;  // This will show animation alerting user to access point mode
+      Serial.println("Restarting chip");
+      // 11:58AM 
+      // state = 4;  // This will show animation alerting user to access point mode
       isOff = true;   // Turn off NeoPixels
-      res = false;  // Reset WiFi to false since we want AP
-      if(resetWiFi()){
-        if(awsConnect){
-            state = 5;
-        }      
-      }else{
-        Serial.println("CRITICAL ERROR: Couldn't connect to wifi");
-      }     
+      // 11:58AM 
+      // res = false;  // Reset WiFi to false since we want AP
+      // if(resetWiFi()){
+      //   if(awsConnect){
+      //       state = 5;
+      //   }      
+      // }else{
+      //   Serial.println("CRITICAL ERROR: Couldn't connect to wifi");
+      // }     
+      restartAndConnect();
       break;    
     case AceButton::kEventReleased:
       Serial.println("single click");
@@ -378,6 +382,16 @@ bool resetWiFi(){
   } 
 }
 
+// Restarts the WiFi chip and reconnects to AWS
+// This can be used when device moves to new network or when gremlins strike
+void restartAndConnect(){
+  client.disconnect();
+  ESP.restart();
+  connectWiFI();
+  connect();
+}
+
+// Connect to AWS IoT service and subscribe to MQTT topic
 void connect(){
     if(!awsConnect()){ // Return immediately if we can't connect to AWS
       return;
@@ -415,6 +429,23 @@ bool awsConnect(){
   return true;
 
 }
+
+// // Debug function to help deal with weird disconnects
+// bool isNetworkConnected(){
+//   if(WiFi.isConnected()){
+//     if(client.connected()){
+//       state = 5;
+//       countDown = millis();   // Set the timer so we show the animation for the right amount of time
+//       return true;
+//     } else {
+//       connect();
+//       return isNetworkConnected();  // Call this function again 
+//     }
+//   } else {
+//     connectWiFI();
+//     return isNetworkConnected();  // Call this function again 
+//   }
+// }
 
 bool mqttTopicSubscribe(){
 
@@ -468,9 +499,35 @@ void messageReceived(String &topic, String &payload) {
     }    
 }
 
+// Connects to known WiFi or launches access point if none available
+void connectWiFI(){
+  WiFi.disconnect(true); // Just in case we're connected
+  Serial.println("Trying to reconnect to known wifi...");
+  // Set this in order for loop() to keep running
+  wm.setConfigPortalBlocking(false);
+  // Initiatize WiFiManager
+  res = wm.autoConnect(CLIENT_ID, AP_PASSWORD); // password protected ap
+  wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
+  // Seeing if we can re-connect to known WiFi
+  if(!res) {
+      Serial.println("Failed to connect or hit timeout");
+      state = 4;  // Show SoftAP animation
+      //wm.resetSettings(); // Uncomment for debugging
+      //ESP.restart();
+  } 
+  else {
+      //if you get here you have connected to the WiFi    
+      Serial.println("connected to wifi :)");
+  }
+
+}
 
 void setup() {
-    WiFi.disconnect(true);
+    // @TODO
+    // Consider setting MQTT options (https://github.com/256dpi/arduino-mqtt):
+    // void setOptions(int keepAlive, bool cleanSession, int timeout);
+
+//    WiFi.disconnect(true);
     delay(5000);
     Serial.begin(115200);
     Serial.println("\n Starting");
@@ -483,26 +540,27 @@ void setup() {
     resetBrightness();// These things are bright!
     updatePattern(state);
 
-    Serial.println("Trying to reconnect to wifi...");
-    // Set this in order for loop() to keep running
-    wm.setConfigPortalBlocking(false);
+    // Serial.println("Trying to reconnect to wifi...");
+    // // Set this in order for loop() to keep running
+    // wm.setConfigPortalBlocking(false);
 
-    // Initiatize WiFiManager
-    res = wm.autoConnect(CLIENT_ID, AP_PASSWORD); // password protected ap
-    wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
+    // // Initiatize WiFiManager
+    // res = wm.autoConnect(CLIENT_ID, AP_PASSWORD); // password protected ap
+    // wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
 
-    // Seeing if we can re-connect to known WiFi
-    if(!res) {
-        Serial.println("Failed to connect or hit timeout");
-        state = 4;  // Show SoftAP animation
-        //wm.resetSettings(); // Uncomment for debugging
-        //ESP.restart();
-    } 
-    else {
-        //if you get here you have connected to the WiFi    
-        Serial.println("connected to wifi :)");
-    }
+    // // Seeing if we can re-connect to known WiFi
+    // if(!res) {
+    //     Serial.println("Failed to connect or hit timeout");
+    //     state = 4;  // Show SoftAP animation
+    //     //wm.resetSettings(); // Uncomment for debugging
+    //     //ESP.restart();
+    // } 
+    // else {
+    //     //if you get here you have connected to the WiFi    
+    //     Serial.println("connected to wifi :)");
+    // }
 
+    connectWiFI();
     connect();
 
     resetTimer = millis();  // Start the reset countdown

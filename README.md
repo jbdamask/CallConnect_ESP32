@@ -6,6 +6,8 @@ ESP32 board communciation via AWS IoT MQTT
 
 This is a quickly evolving example. It combines several common libraries to control LED animations locally, and send the state information to AWS. Topic subscribers will receive the state information and can act as they need.
 
+Edit Config.h.example and certificates.h.example to meet your specific needs and save as Config.h and certificates.h
+
 ### Hardware
 
 * [Adafruit Feather HUZZAH ESP32](https://www.adafruit.com/product/3405)

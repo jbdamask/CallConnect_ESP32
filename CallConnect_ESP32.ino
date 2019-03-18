@@ -128,18 +128,7 @@ void handleButtonPush(AceButton* /* button */, uint8_t eventType,
     case AceButton::kEventLongPressed:
       Serial.println("Button Held");
       Serial.println("Restarting chip");
-      // 11:58AM 
-      // state = 4;  // This will show animation alerting user to access point mode
-      isOff = true;   // Turn off NeoPixels
-      // 11:58AM 
-      // res = false;  // Reset WiFi to false since we want AP
-      // if(resetWiFi()){
-      //   if(awsConnect){
-      //       state = 5;
-      //   }      
-      // }else{
-      //   Serial.println("CRITICAL ERROR: Couldn't connect to wifi");
-      // }     
+      isOff = true;   // Turn off NeoPixels   
       restartAndConnect();
       break;    
     case AceButton::kEventReleased:
@@ -165,7 +154,6 @@ void BlendAnimUpdate(const AnimationParam& param){
         param.progress);
 
     // apply the color to the strip
-    // for (uint16_t pixel = 0; pixel < PixelCount; pixel++)
     for (uint16_t pixel = 0; pixel < NUMPIXELS1; pixel++)
     {
         strip.SetPixelColor(pixel, updatedColor);
@@ -179,7 +167,6 @@ void FadeInFadeOutRinseRepeat(RgbColor myColor){
         // we use HslColor object as it allows us to easily pick a hue
         // with the same saturation and luminance so the colors picked
         // will have similiar overall brightness
-        //RgbColor target = HslColor(random(360) / 360.0f, 1.0f, luminance);
         RgbColor target = HslColor(myColor);
         uint16_t time = random(800, 2000);
 
@@ -192,10 +179,8 @@ void FadeInFadeOutRinseRepeat(RgbColor myColor){
     {
         // fade to black
         uint16_t time = random(600, 700);
-
         animationState[0].StartingColor = strip.GetPixelColor(0);
         animationState[0].EndingColor = RgbColor(0);
-
         animations.StartAnimation(0, time, BlendAnimUpdate);
     }
 
@@ -246,7 +231,6 @@ void sparkle(uint8_t howmany) {
     int blue = myFavoriteColors[c][2];
 
     // get a random pixel from the list
-    // int j = random(strip.numPixels());
     int j = random(NUMPIXELS1);
 
     // now we will 'fade' it in 5 steps
@@ -269,8 +253,6 @@ void sparkle(uint8_t howmany) {
     int b = blue * (x+1); b /= 5;
     strip.SetPixelColor(j, RgbColor(r,g,b));
     strip.Show();
-    // strip.setPixelColor(j, strip.Color(r,g,b));
-    // strip.show();
   }
   lastUpdate = millis();
 }
@@ -280,7 +262,6 @@ void roundy(float hue){
     // Initialize if we're not already animating
     if(!animations.IsAnimating()){
       DrawTailPixels(hue);
-      //animations.StartAnimation(0, 66, LoopAnimUpdate); 
       ringAnimation.StartAnimation(0,66, LoopAnimUpdate);
     } 
 }
@@ -288,12 +269,10 @@ void roundy(float hue){
 // Used by Roundy
 void DrawTailPixels(float hue){
     // using Hsl as it makes it easy to pick from similiar saturated colors
-    //float hue = random(360) / 360.0f;  
     for (uint16_t index = 0; index < strip.PixelCount() && index <= TailLength; index++)
     {
         float lightness = index * MaxLightness / TailLength;
         RgbColor color = HslColor(hue, 1.0f, lightness);
-
         strip.SetPixelColor(index, colorGamma.Correct(color));
     }
 }
@@ -305,9 +284,7 @@ void LoopAnimUpdate(const AnimationParam& param){
     if (param.state == AnimationState_Completed)
     {
         // done, time to restart this position tracking animation/timer
-        //animations.RestartAnimation(param.index);
         ringAnimation.RestartAnimation(param.index);
-
         // rotate the complete strip one pixel to the right on every update
         strip.RotateRight(1);
     }
@@ -430,26 +407,6 @@ bool awsConnect(){
 
 }
 
-// // Debug function to help deal with weird disconnects
-// bool isNetworkConnected(){
-//   if(WiFi.isConnected()){
-//     if(client.connected()){
-//       state = 5;
-//       countDown = millis();   // Set the timer so we show the animation for the right amount of time
-//       return true;
-//     } else {
-//       connect();
-//       return isNetworkConnected();  // Call this function again 
-//     }
-//   } else {
-//     connectWiFI();
-//     return isNetworkConnected();  // Call this function again 
-//   }
-// }
-
-bool mqttTopicSubscribe(){
-
-}
 
 void publish(String state){ // Isn't state global? If so, no need to pass
   char msg[50];
@@ -461,7 +418,6 @@ void publish(String state){ // Isn't state global? If so, no need to pass
   JsonObject& root = jsonBuffer.createObject();
   root["thing_name"] = String(CLIENT_ID);
   root["state"] = state;
-  //Serial.println("    Created the object. Now print to json");
   String sJson = "";
   root.printTo(sJson);
   char* cJson = &sJson[0u];
@@ -512,8 +468,6 @@ void connectWiFI(){
   if(!res) {
       Serial.println("Failed to connect or hit timeout");
       state = 4;  // Show SoftAP animation
-      //wm.resetSettings(); // Uncomment for debugging
-      //ESP.restart();
   } 
   else {
       //if you get here you have connected to the WiFi    
@@ -527,7 +481,6 @@ void setup() {
     // Consider setting MQTT options (https://github.com/256dpi/arduino-mqtt):
     // void setOptions(int keepAlive, bool cleanSession, int timeout);
 
-//    WiFi.disconnect(true);
     delay(5000);
     Serial.begin(115200);
     Serial.println("\n Starting");
@@ -535,35 +488,16 @@ void setup() {
     buttonSetup();
 
     // Initialize NeoPixels
-    // strip.begin(); // This initializes the NeoPixel library.
     strip.Begin();
     resetBrightness();// These things are bright!
     updatePattern(state);
 
-    // Serial.println("Trying to reconnect to wifi...");
-    // // Set this in order for loop() to keep running
-    // wm.setConfigPortalBlocking(false);
-
-    // // Initiatize WiFiManager
-    // res = wm.autoConnect(CLIENT_ID, AP_PASSWORD); // password protected ap
-    // wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
-
-    // // Seeing if we can re-connect to known WiFi
-    // if(!res) {
-    //     Serial.println("Failed to connect or hit timeout");
-    //     state = 4;  // Show SoftAP animation
-    //     //wm.resetSettings(); // Uncomment for debugging
-    //     //ESP.restart();
-    // } 
-    // else {
-    //     //if you get here you have connected to the WiFi    
-    //     Serial.println("connected to wifi :)");
-    // }
-
+    // Connect to stuff
     connectWiFI();
     connect();
 
-    resetTimer = millis();  // Start the reset countdown
+    // Start the reset countdown
+    resetTimer = millis();  
 }
 
 void loop(){
@@ -589,7 +523,6 @@ void loop(){
       resetTimer = millis();  // If state change is registered, things are working. Reset the timer
   }
 
-
   // The various cases we can face
   switch (state){
     case 0: // idle 
@@ -602,7 +535,6 @@ void loop(){
         idleTimer = millis();
       } else {  // If nothing going on, and nothing has gone on for a while, proactively restart the chip
         if(millis() - resetTimer > RESET_AFTER){
-          //esp_restart();
           ESP.restart();
         }
       }
@@ -666,10 +598,8 @@ void loop(){
       }    
       break;
     case 4: // SoftAP
-      //if (animations.IsAnimating()){
       if(ringAnimation.IsAnimating()){
           // the normal loop just needs these two to run the active animations
-          //animations.UpdateAnimations();
           ringAnimation.UpdateAnimations();
           strip.Show();
       } else {
@@ -679,14 +609,11 @@ void loop(){
       }  
       break;
     case 5: // Connection success
-      //if(animations.IsAnimating()){
       if(ringAnimation.IsAnimating()){
         // the normal loop just needs these two to run the active animations
-        //animations.UpdateAnimations();
         ringAnimation.UpdateAnimations();
         strip.Show();
       } else {
-        //FadeInFadeOutRinseRepeat(RgbColor(0, 200, 0));
         float hue = 120/360.0f;
         roundy(hue); // Hue of 120 is green
       }

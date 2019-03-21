@@ -383,6 +383,9 @@ bool awsConnect(){
   net.setCACert(rootCABuff);
   net.setCertificate(certificateBuff);
   net.setPrivateKey(privateKeyBuff);
+  // Changes the keep alive interval to match aws's SDK default (https://docs.aws.amazon.com/general/latest/gr/aws_service_limits.html#limits_iot)
+  // I'm hoping this reduces the number of disconnects I'm seeing
+  client.setOptions(1200, true, 1000);  
   client.begin(awsEndPoint, 8883, net);
   Serial.print("\nConnecting to AWS MQTT broker");
   while (!client.connect(CLIENT_ID)) {
@@ -499,12 +502,14 @@ void setup() {
 
 void loop(){
   wm.process(); // Needed for loop to run when WiFiManager is in SoftAP mode
+  client.loop();
+  // The MQTTClient library docs say to put a delay(10) here but I don't want to block!
+  
   // Make sure we're still connected
   if(!client.connected()){
     connect();
   }
-  client.loop();
-
+  
   bool static toldUs = false; // When in state 1, we're either making or receiving a call
   isTouched = false;  // Reset unless there's a touch event
   buttonState.check();

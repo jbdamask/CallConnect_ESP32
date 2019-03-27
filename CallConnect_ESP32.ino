@@ -109,7 +109,7 @@ void buttonSetup(){
   // and LongPressed to go into SoftAP mode. Don't need Clicked.
     buttonStateConfig.setEventHandler(handleButtonPush);
     buttonStateConfig.setClickDelay(75);
-   buttonStateConfig.setFeature(ButtonConfig::kFeatureClick);
+    buttonStateConfig.setFeature(ButtonConfig::kFeatureClick);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureRepeatPress);
     buttonStateConfig.setFeature(ButtonConfig::kFeatureLongPress);
     buttonStateConfig.setLongPressDelay(LONG_PRESS_DURATION);

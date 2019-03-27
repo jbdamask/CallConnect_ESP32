@@ -400,7 +400,7 @@ bool awsConnect(){
   Serial.println("Connected to AWS"); 
   awsConnectTimer = 0;
   // Now subscribe to MQTT topic
-  if(!client.subscribe(subscribeTopic)) {
+  if(!client.subscribe(mqttTopic)) {
     Serial.println("CONNECTION FAILURE: Could not subscribe to MQTT topic");
     return false;
   }
@@ -424,9 +424,9 @@ void publish(String state){ // Isn't state global? If so, no need to pass
   if(!client.connected()){
     Serial.println("PUBLISH ERROR: Client not connected");
   }
-  if(!client.publish(publishTopic, cJson)){
+  if(!client.publish(mqttTopic, cJson)){    
    Serial.println("PUBLISH ERROR: Publish failed");
-   Serial.print("  Topic: "); Serial.println(publishTopic);
+   Serial.print("  Topic: "); Serial.println(mqttTopic);
    Serial.print("  Message: "); Serial.println(cJson);
   }
 }

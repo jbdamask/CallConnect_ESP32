@@ -1,3 +1,10 @@
+# Purpose: Generates Config.h and certificates.h files from templates
+# Preconditions: root.pem, cert.pem and privkey.pem files exist in current directory
+# Synopsis: python makeConfigFiles.py doobeedoo 19 'myendpoint.iot.us-east-1.amazonaws.com' lights
+# Notes: 
+#		1 - No error handling
+#		2 - Written for Python 2.7 but seems to work fine with Python 3.7
+
 import os, sys
 
 cwd = os.path.split(os.getcwd())[1]

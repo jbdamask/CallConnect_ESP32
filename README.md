@@ -11,8 +11,7 @@ Edit Config.h.example and certificates.h.example to meet your specific needs and
 ### Hardware
 
 * [Adafruit Feather HUZZAH ESP32](https://www.adafruit.com/product/3405)
-* RGB NeoPixels (I'm using an [Adafruit NeoPixel Ring](https://www.adafruit.com/product/1643))
-* [Buttons](https://www.adafruit.com/product/1119)
+* RGB NeoPixels
 * MicroUSB cable for flashing board
 
 ### Libraries

@@ -1,4 +1,4 @@
-// Paste the file contents into the certificate_pem_crt array in the following fashion. Make sure you follow these four rules when doing so:
+// Paste the file contents into the arrays in the following fashion. Make sure you follow these four rules when doing so:
 
 // Do not add any extra whitespaces
 // End your lines with: \n\

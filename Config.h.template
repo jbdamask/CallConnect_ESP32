@@ -4,7 +4,7 @@ const char *AP_PASSWORD = "<access point password>";
 const uint8_t NUMPIXELS1 = <num pixels>;
 
 // IoT broker
-const char *awsEndPoint = "<endpoint from aws iot console>";
+const char *awsEndPoint = "<endpoint>";
 const char *mqttTopic = "<mqtt topic>";
 
 // Sensible defaults

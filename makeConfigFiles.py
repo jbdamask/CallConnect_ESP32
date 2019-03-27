@@ -17,7 +17,7 @@ with open("Config.h.template", "r") as file:
 filedata = filedata.replace('<device id>', cwd)
 filedata = filedata.replace('<access point password>', sys.argv[1])
 filedata = filedata.replace('<num pixels>', sys.argv[2])
-filedata = filedata.replace('<endpoint from aws iot console>', sys.argv[3])
+filedata = filedata.replace('<endpoint>', sys.argv[3])
 filedata = filedata.replace('<mqtt topic>', sys.argv[4])
 
 with open("Config.h", "w") as file:

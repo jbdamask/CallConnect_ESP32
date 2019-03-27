@@ -517,7 +517,6 @@ void setup() {
 void loop(){
   wm.process(); // Needed for loop to run when WiFiManager is in SoftAP mode
   client.loop();
-  // The MQTTClient library docs say to put a delay(10) here but I don't want to block!
   
   // Make sure we're still connected
   if(res){
@@ -539,7 +538,6 @@ void loop(){
       previousState = state;
       isOff = (state == 0) ? true : false;
       ringAnimation.StopAll();
-     // animations.StopAll();
       resetTimer = millis();  // If state change is registered, things are working. Reset the timer
   }
 

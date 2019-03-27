@@ -92,6 +92,8 @@ bool isTouched = false;
 bool previouslyTouched = false;
 bool makingCall = false;    // Keep track of who calls and who receives
 
+bool debug = false; // Set to true to clean ESP32 memory
+
 /* Clean house -----*/
 void resetState(){
   state = 0;
@@ -259,11 +261,11 @@ void sparkle(uint8_t howmany) {
 
 // LED ring
 void roundy(float hue){
-    // Initialize if we're not already animating
-    if(!animations.IsAnimating()){
+  //  // Initialize if we're not already animating
+ //   if(!ringAnimation.IsAnimating()){
       DrawTailPixels(hue);
       ringAnimation.StartAnimation(0,66, LoopAnimUpdate);
-    } 
+   // } 
 }
 
 // Used by Roundy
@@ -346,7 +348,7 @@ bool resetWiFi(){
   ESP.restart();
   // start portal w delay
   Serial.println("Starting config portal");
-  wm.setConfigPortalTimeout(120);      
+  //wm.setConfigPortalTimeout(120);      
   if (!wm.startConfigPortal(CLIENT_ID, AP_PASSWORD)) {
     Serial.println("failed to connect or hit timeout");
     delay(3000);
@@ -379,6 +381,7 @@ void connect(){
 
 bool awsConnect(){
   static int awsConnectTimer = 0;
+  static bool printOnce = false;
   int awsConnectTimout = 10000;
   net.setCACert(rootCABuff);
   net.setCertificate(certificateBuff);
@@ -387,11 +390,15 @@ bool awsConnect(){
   // I'm hoping this reduces the number of disconnects I'm seeing
   client.setOptions(1200, true, 1000);  
   client.begin(awsEndPoint, 8883, net);
-  Serial.print("\nConnecting to AWS MQTT broker");
+  if(!printOnce) Serial.print("\nConnecting to AWS MQTT broker");
   while (!client.connect(CLIENT_ID)) {
     if(awsConnectTimer == 0) awsConnectTimer = millis();
     if (millis() - awsConnectTimer > awsConnectTimout) {
-      Serial.println("CONNECTION FAILURE: Could not connect to aws");
+      if(!printOnce) {
+        Serial.println("CONNECTION FAILURE: Could not connect to aws");
+        printOnce = true;
+      }
+
       return false;
     }
     Serial.print(".");
@@ -461,19 +468,24 @@ void connectWiFI(){
   Serial.println("Trying to reconnect to known wifi...");
   // Set this in order for loop() to keep running
   wm.setConfigPortalBlocking(false);
+  wm.setSaveParamsCallback(wifiConnectedCallback);
   // Initiatize WiFiManager
   res = wm.autoConnect(CLIENT_ID, AP_PASSWORD); // password protected ap
-  wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
+  //wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
   // Seeing if we can re-connect to known WiFi
   if(!res) {
-      Serial.println("Failed to connect or hit timeout");
+      Serial.println("Failed to connect to WiFi. Starting access point");
       state = 4;  // Show SoftAP animation
   } 
   else {
       //if you get here you have connected to the WiFi    
       Serial.println("connected to wifi :)");
   }
+}
 
+void wifiConnectedCallback(){
+  Serial.println("Successfully connected to WiFi");
+  res = true;
 }
 
 void setup() {
@@ -492,9 +504,11 @@ void setup() {
     resetBrightness();// These things are bright!
     updatePattern(state);
 
-    // Connect to stuff
+    if(debug){
+      resetWiFi();
+    }
     connectWiFI();
-    connect();
+    
 
     // Start the reset countdown
     resetTimer = millis();  
@@ -506,8 +520,10 @@ void loop(){
   // The MQTTClient library docs say to put a delay(10) here but I don't want to block!
   
   // Make sure we're still connected
-  if(!client.connected()){
-    connect();
+  if(res){
+    if(!client.connected()){
+      connect();
+    }
   }
   
   bool static toldUs = false; // When in state 1, we're either making or receiving a call
@@ -522,6 +538,8 @@ void loop(){
       strip.Show();
       previousState = state;
       isOff = (state == 0) ? true : false;
+      ringAnimation.StopAll();
+     // animations.StopAll();
       resetTimer = millis();  // If state change is registered, things are working. Reset the timer
   }
 
@@ -616,10 +634,11 @@ void loop(){
         ringAnimation.UpdateAnimations();
         strip.Show();
       } else {
+        Serial.println("starting animation");
         float hue = 120/360.0f;
         roundy(hue); // Hue of 120 is green
       }
-      if(millis() - countDown > (IDLE_TIMEOUT-2)) { // Show we're connected for just a few seconds
+      if(millis() - countDown > (IDLE_TIMEOUT)) { // Show we're connected for just a few seconds
         Serial.println("State 5. Timed out. Moving to State 0");
         resetState();
       }

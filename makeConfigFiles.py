@@ -4,6 +4,8 @@
 # Notes: 
 #		1 - No error handling
 #		2 - Written for Python 2.7 but seems to work fine with Python 3.7
+#		3 - If you're dealing with a bunch of devices, it's easiest to call this from a bash script that has
+#			thing-specific parameters and copies the files into the right folder for deployment
 
 import os, sys
 

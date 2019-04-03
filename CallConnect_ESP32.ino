@@ -15,6 +15,8 @@
 #include "AceButton.h"
 #include "Config.h"
 #include "certificates.h"
+#include "esp32-hal-cpu.h"  // For CPU speed configuration http://bbs.esp32.com/viewtopic.php?f=19&t=9289
+
 using namespace ace_button;
 
 /* Pins -----*/
@@ -493,9 +495,10 @@ void setup() {
     // Consider setting MQTT options (https://github.com/256dpi/arduino-mqtt):
     // void setOptions(int keepAlive, bool cleanSession, int timeout);
 
-    delay(5000);
+    delay(5000); // Delete once I add sleep modes
     Serial.begin(115200);
     Serial.println("\n Starting");
+    setCpuFrequencyMhz(80); //Set CPU clock to 80MHz to reduce power draw so battery lasts longer
 
     buttonSetup();
 
@@ -517,7 +520,7 @@ void setup() {
 void loop(){
   wm.process(); // Needed for loop to run when WiFiManager is in SoftAP mode
   client.loop();
-  
+
   // Make sure we're still connected
   if(res){
     if(!client.connected()){

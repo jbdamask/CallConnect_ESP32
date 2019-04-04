@@ -109,9 +109,7 @@ void resetState(){
   state = 0;
   previouslyTouched = false;
   makingCall = false;
-  //publish(String(state));
   String json = createPayload(LIGHTS);
-  //char* cJson = json[0u]
   publish(mqttTopic, &json[0u]);
 }
 
@@ -134,10 +132,7 @@ void readTemperature(){
   if(temperatureReadCount == TEMPERATURE_READS_TO_AVERAGE) {
     averageTemperature = sumTemperature / TEMPERATURE_READS_TO_AVERAGE; // assign to global var
     payload = createPayload(TEMPERATURE);
-    publish(temperatureTopic, payload);
-    // Serial.print("Avg temperature: "); 
-    // Serial.print(averageTemperature);
-    // Serial.println(" F");    
+    publish(temperatureTopic, payload); 
     sumTemperature = 0;
   }
   temperatureReadCount = temperatureReadCount > TEMPERATURE_READS_TO_AVERAGE ? temperatureReadCount = 1 : ++temperatureReadCount; 
@@ -475,7 +470,6 @@ String createPayload(int et){
   }
   root.printTo(sJson);
   return sJson;
-  //return &sJson[0u];
 }
 
 // Publish message to MQTT topic
@@ -489,29 +483,6 @@ void publish(String topic, String payload){
     Serial.println(client.lastError());
   }
 }
-
-// void publish(String state){ // Isn't state global? If so, no need to pass
-//   char msg[50];
-//   static int value = 0;
-//   int NUM_RETRIES = 10;
-//   int cnt = 0;
-//   Serial.println("Function: publish()");
-//   StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-//   JsonObject& root = jsonBuffer.createObject();
-//   root["thing_name"] = String(CLIENT_ID);
-//   root["state"] = state;
-//   String sJson = "";
-//   root.printTo(sJson);
-//   char* cJson = &sJson[0u];
-//   if(!client.connected()){
-//     Serial.println("PUBLISH ERROR: Client not connected");
-//   }
-//   if(!client.publish(mqttTopic, cJson)){    
-//    Serial.println("PUBLISH ERROR: Publish failed");
-//    Serial.print("  Topic: "); Serial.println(mqttTopic);
-//    Serial.print("  Message: "); Serial.println(cJson);
-//   }
-// }
 
 // AWS MQTT callback handler
 void messageReceived(String &topic, String &payload) {
@@ -630,7 +601,6 @@ void loop(){
     case 0: // idle 
       if(isTouched && state != 4){ // Only register touch event if we're not in SoftAP mode
         state = 1;
-        //publish(String(state));   // TODO - make sure String is the right type for state in the payload
         payload = createPayload(LIGHTS);
         publish(mqttTopic, payload);
         previouslyTouched = true;
@@ -658,7 +628,6 @@ void loop(){
           }
       } else if(isTouched){  // If we're receiving a call, are now are touching the local device, then we're connected
           state = 2;
-          //publish(String(state));
           payload = createPayload(LIGHTS);
           publish(mqttTopic, payload);
           previouslyTouched = true;
@@ -676,7 +645,6 @@ void loop(){
       if(isTouched){    // Touch again to disconnect
           Serial.println("State 2. Button pushed. Moving to State 3");
           state = 3;
-          //publish(String(state));
           payload = createPayload(LIGHTS);
           publish(mqttTopic, payload);
           previouslyTouched = false;
@@ -701,7 +669,6 @@ void loop(){
       }
       if(isTouched && previouslyTouched == false){  // If we took our hand off but put it back on in under the time limit, re-connect
           state = 2;
-          //publish("2");
           payload = createPayload(LIGHTS);
           publish(mqttTopic, payload);
           previouslyTouched = true;

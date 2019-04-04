@@ -23,6 +23,8 @@ using namespace ace_button;
 #define PIN_STATE     27    // Button pin for changing state
 #define PIN_NEOPIXEL   12    // pin connected to the small NeoPixels strip
 
+/* JSON -----*/
+const int JSON_BUFFER_SIZE  = 512;
 
 /* AWS IOT -----*/
 int tick=0,msgCount=0,msgReceived = 0;
@@ -31,10 +33,7 @@ char payload[512];  // Payload array to store thing shadow JSON document
 char rcvdPayload[512];
 int counter = 0;    // Counter for iteration
 WiFiClientSecure net;
-MQTTClient client;
-
-/* JSON -----*/
-#define JSON_BUFFER_SIZE  512
+MQTTClient client(JSON_BUFFER_SIZE);
 
 /* NeoPixel stuff -----*/
 // Number of pixels in Config.h
@@ -77,9 +76,11 @@ MyAnimationState animationState[AnimationChannels];
 uint8_t state = 0, previousState = 0;
 unsigned long lastUpdate = 0, idleTimer = 0, resetTimer = 0; // for millis() when last update occurred
 
+
 /* Timing stuff -----*/
 long countDown = 0;  // Counts down a certain number of seconds before taking action (for certain states)
-#define IDLE_TIMEOUT    5000   // Milliseconds that there can be no touch or ble input before reverting to idle state
+//#define IDLE_TIMEOUT    5000   // Milliseconds that there can be no touch or ble input before reverting to idle state
+const long IDLE_TIMEOUT =  5000;   // Milliseconds that there can be no touch or ble input before reverting to idle state
 
 /* WiFi -----*/
 WiFiManager wm; // global wm instance
@@ -96,13 +97,52 @@ bool makingCall = false;    // Keep track of who calls and who receives
 
 bool debug = false; // Set to true to clean ESP32 memory
 
+/* Temperature sensor -----*/
+#define TEMPERATURE_PIN 34                 // The analog pin the TMP36's Vout (sense) pin is connected to (must be ADC1 when using WiFi)
+const int TEMPERATURE_READ_INTERVAL = 5000; // Frequency of temperature checks
+long temperatureTimePoint = 0;              // Helps keep track of time intervals
+const int TEMPERATURE_READS_TO_AVERAGE = 12;  // Average temperature readings over this unit
+float averageTemperature;                   // Temperature averaged over TEMPERATURE_READS_TO_AVERAGE
+
 /* Clean house -----*/
 void resetState(){
   state = 0;
   previouslyTouched = false;
   makingCall = false;
-  publish(String(state));
+  //publish(String(state));
+  String json = createPayload(LIGHTS);
+  //char* cJson = json[0u]
+  publish(mqttTopic, &json[0u]);
 }
+
+/*  ====================================================================  *
+*                            TEMPERATURE SENSOR                           *
+*   ====================================================================  */
+void readTemperature(){
+  float temperaturePinReading;    // The analog reading from the sensor
+  float volts;                    // Used for temparature conversion
+  float temperature;              // Calculated temperature
+  static int temperatureReadCount = 1; // Keeps track of number of reads
+  static float sumTemperature = 0.0;
+  String payload; 
+  temperaturePinReading = analogRead(TEMPERATURE_PIN);
+  volts = temperaturePinReading/1024.0;             // normalize by the maximum temperature raw reading range
+  temperature = (volts - 0.5) * 100 ;         //calculate temperature celsius from voltage as per the equation found on the sensor spec sheet.
+  temperature = (temperature * 9.0/5.0) + 32.0;    // Farenheit    
+  sumTemperature += temperature;
+  // Average over period
+  if(temperatureReadCount == TEMPERATURE_READS_TO_AVERAGE) {
+    averageTemperature = sumTemperature / TEMPERATURE_READS_TO_AVERAGE; // assign to global var
+    payload = createPayload(TEMPERATURE);
+    publish(temperatureTopic, payload);
+    // Serial.print("Avg temperature: "); 
+    // Serial.print(averageTemperature);
+    // Serial.println(" F");    
+    sumTemperature = 0;
+  }
+  temperatureReadCount = temperatureReadCount > TEMPERATURE_READS_TO_AVERAGE ? temperatureReadCount = 1 : ++temperatureReadCount; 
+}
+
 
 /*  ====================================================================  *
 *                               BUTTON                                    *
@@ -417,38 +457,72 @@ bool awsConnect(){
   return true;
 }
 
-void publish(String state){ // Isn't state global? If so, no need to pass
-  char msg[50];
-  static int value = 0;
-  int NUM_RETRIES = 10;
-  int cnt = 0;
-  Serial.println("Function: publish()");
+String createPayload(int et){
   StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
-  root["thing_name"] = String(CLIENT_ID);
-  root["state"] = state;
   String sJson = "";
-  root.printTo(sJson);
-  char* cJson = &sJson[0u];
-  if(!client.connected()){
-    Serial.println("PUBLISH ERROR: Client not connected");
+  root["thing_name"] = String(CLIENT_ID);
+  switch(et){
+    case LIGHTS:
+      root["state"] = state;  // state is global
+      break;
+    case TEMPERATURE:
+      root["temperature"] = int (averageTemperature); // AverageTemperature is global. The cast truncates the value but I'm cool with that
+      root["statistic"] = "Average";
+      root["unit"] = "Farenheit";
+      root["period_in_seconds"]  = (TEMPERATURE_READS_TO_AVERAGE * TEMPERATURE_READ_INTERVAL) / 1000;
+      break;
   }
-  if(!client.publish(mqttTopic, cJson)){    
-   Serial.println("PUBLISH ERROR: Publish failed");
-   Serial.print("  Topic: "); Serial.println(mqttTopic);
-   Serial.print("  Message: "); Serial.println(cJson);
+  root.printTo(sJson);
+  return sJson;
+  //return &sJson[0u];
+}
+
+// Publish message to MQTT topic
+void publish(String topic, String payload){ 
+  Serial.println("Function: publish()");
+  if(!client.publish(topic, &payload[0u])){    
+    // serial debugging only
+    Serial.println("PUBLISH ERROR: Publish failed");
+    Serial.print("  Topic: "); Serial.println(mqttTopic);
+    Serial.print("  Message: "); Serial.println(payload);
+    Serial.println(client.lastError());
   }
 }
 
+// void publish(String state){ // Isn't state global? If so, no need to pass
+//   char msg[50];
+//   static int value = 0;
+//   int NUM_RETRIES = 10;
+//   int cnt = 0;
+//   Serial.println("Function: publish()");
+//   StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+//   JsonObject& root = jsonBuffer.createObject();
+//   root["thing_name"] = String(CLIENT_ID);
+//   root["state"] = state;
+//   String sJson = "";
+//   root.printTo(sJson);
+//   char* cJson = &sJson[0u];
+//   if(!client.connected()){
+//     Serial.println("PUBLISH ERROR: Client not connected");
+//   }
+//   if(!client.publish(mqttTopic, cJson)){    
+//    Serial.println("PUBLISH ERROR: Publish failed");
+//    Serial.print("  Topic: "); Serial.println(mqttTopic);
+//    Serial.print("  Message: "); Serial.println(cJson);
+//   }
+// }
+
 // AWS MQTT callback handler
 void messageReceived(String &topic, String &payload) {
-  Serial.println("incoming: " + topic + " - " + payload);
+
     StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
     JsonObject& root = jsonBuffer.parseObject(payload);
     const char* d = root["thing_name"];
-    const char* s = root["state"];    
-    Serial.println(String(d));
     if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
+    Serial.println("incoming: " + topic + " - " + payload);
+    Serial.println(String(d));
+    const char* s = root["state"];    
     Serial.println("    Message is from another device. Printing...");
     Serial.print("State value: "); Serial.println(s);
 
@@ -499,10 +573,12 @@ void setup() {
     Serial.begin(115200);
     Serial.println("\n Starting");
     setCpuFrequencyMhz(80); //Set CPU clock to 80MHz to reduce power draw so battery lasts longer
-
+    // Button
     buttonSetup();
+    // Mark time for temperature reading
+    temperatureTimePoint = millis();
 
-    // Initialize NeoPixels
+    // NeoPixels
     strip.Begin();
     resetBrightness();// These things are bright!
     updatePattern(state);
@@ -510,14 +586,13 @@ void setup() {
     if(debug){
       resetWiFi();
     }
-    connectWiFI();
-    
-
+    connectWiFI();    
     // Start the reset countdown
     resetTimer = millis();  
 }
 
 void loop(){
+  String payload;    // JSON payload
   wm.process(); // Needed for loop to run when WiFiManager is in SoftAP mode
   client.loop();
 
@@ -527,6 +602,12 @@ void loop(){
       connect();
     }
   }
+
+  // take ambient temperature reading every n seconds
+  if(millis() - temperatureTimePoint > TEMPERATURE_READ_INTERVAL){
+    readTemperature();
+    temperatureTimePoint = millis();
+  }  
   
   bool static toldUs = false; // When in state 1, we're either making or receiving a call
   isTouched = false;  // Reset unless there's a touch event
@@ -549,7 +630,9 @@ void loop(){
     case 0: // idle 
       if(isTouched && state != 4){ // Only register touch event if we're not in SoftAP mode
         state = 1;
-        publish(String(state));   // TODO - make sure String is the right type for state in the payload
+        //publish(String(state));   // TODO - make sure String is the right type for state in the payload
+        payload = createPayload(LIGHTS);
+        publish(mqttTopic, payload);
         previouslyTouched = true;
         makingCall = true;
         Serial.println("Calling...");
@@ -575,7 +658,9 @@ void loop(){
           }
       } else if(isTouched){  // If we're receiving a call, are now are touching the local device, then we're connected
           state = 2;
-          publish(String(state));
+          //publish(String(state));
+          payload = createPayload(LIGHTS);
+          publish(mqttTopic, payload);
           previouslyTouched = true;
       }
       break;
@@ -591,7 +676,9 @@ void loop(){
       if(isTouched){    // Touch again to disconnect
           Serial.println("State 2. Button pushed. Moving to State 3");
           state = 3;
-          publish(String(state));
+          //publish(String(state));
+          payload = createPayload(LIGHTS);
+          publish(mqttTopic, payload);
           previouslyTouched = false;
       }
       if(state == 3) {
@@ -614,7 +701,9 @@ void loop(){
       }
       if(isTouched && previouslyTouched == false){  // If we took our hand off but put it back on in under the time limit, re-connect
           state = 2;
-          publish("2");
+          //publish("2");
+          payload = createPayload(LIGHTS);
+          publish(mqttTopic, payload);
           previouslyTouched = true;
       }    
       break;

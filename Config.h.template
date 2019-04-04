@@ -6,7 +6,12 @@ const uint8_t NUMPIXELS1 = <num pixels>;
 // IoT broker
 const char *awsEndPoint = "<endpoint>";
 const char *mqttTopic = "<mqtt topic>";
+const char *temperatureTopic = "<mqtt temperatureTopic>";
 
 // Sensible defaults
 const long RESET_AFTER = 1800000;  // 0.5 hour in milliseconds
 const long LONG_PRESS_DURATION = 5000; // Used for long button push to restart the ESP chip
+
+// Can't get enums to work with Arduino toolchain so declare constants
+const int LIGHTS = 1;
+const int TEMPERATURE = 2;

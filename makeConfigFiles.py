@@ -21,6 +21,7 @@ filedata = filedata.replace('<access point password>', sys.argv[1])
 filedata = filedata.replace('<num pixels>', sys.argv[2])
 filedata = filedata.replace('<endpoint>', sys.argv[3])
 filedata = filedata.replace('<mqtt topic>', sys.argv[4])
+filedata = filedata.replace('<mqtt temperatureTopic>', sys.argv[5])
 
 with open("Config.h", "w") as file:
 	file.write(filedata)

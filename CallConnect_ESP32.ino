@@ -80,7 +80,9 @@ unsigned long lastUpdate = 0, idleTimer = 0, resetTimer = 0; // for millis() whe
 /* Timing stuff -----*/
 long countDown = 0;  // Counts down a certain number of seconds before taking action (for certain states)
 //#define IDLE_TIMEOUT    5000   // Milliseconds that there can be no touch or ble input before reverting to idle state
-const long IDLE_TIMEOUT =  5000;   // Milliseconds that there can be no touch or ble input before reverting to idle state
+const long IDLE_TIMEOUT =  20000;   // Duration in milliseconds that there can be no touch or ble input before reverting to idle state
+const long CONNECTION_TIMEOUT = 600000; // Duration in milliseconds that we'll remain connected (instead of forever)
+const long HANGUP_TIMEOUT = 10000;  // Duration in milliseconds to display our "hanging up" animation
 
 /* WiFi -----*/
 WiFiManager wm; // global wm instance
@@ -590,10 +592,11 @@ void loop(){
       wipe();
       if(state != 0 ) resetBrightness();      
       strip.Show();
-      previousState = state;
       isOff = (state == 0) ? true : false;
       ringAnimation.StopAll();
       resetTimer = millis();  // If state change is registered, things are working. Reset the timer
+      if(state==2) countDown = millis();  // If we've moved to a connected state then set the timeout timer
+      previousState = state;
   }
 
   // The various cases we can face
@@ -653,6 +656,14 @@ void loop(){
           Serial.println("Disconnecting. Starting count down timer.");
           countDown = millis();   // Start the timer
       }      
+      if(millis() - countDown > CONNECTION_TIMEOUT){
+        Serial.println("State 2 connection timed out. Moving to State 3");
+        state = 3;
+        payload = createPayload(LIGHTS);
+        publish(mqttTopic, payload);
+        previouslyTouched = false;       
+        countDown = millis(); 
+      }
       break;
     case 3: // Disconnecting
       if (animations.IsAnimating()){
@@ -663,7 +674,7 @@ void loop(){
           Serial.println("Starting to breathe red");
           FadeInFadeOutRinseRepeat(RgbColor(255,0,0));
       }    
-      if(millis() - countDown > IDLE_TIMEOUT) {
+      if(millis() - countDown > HANGUP_TIMEOUT) { // Show 
           Serial.println("State 3. Timed out. Moving to State 0");
           resetState();
       }
@@ -695,7 +706,7 @@ void loop(){
         float hue = 120/360.0f;
         roundy(hue); // Hue of 120 is green
       }
-      if(millis() - countDown > (IDLE_TIMEOUT)) { // Show we're connected for just a few seconds
+      if(millis() - countDown > (IDLE_TIMEOUT / 6)) { // Show we're connected for just a few seconds 
         Serial.println("State 5. Timed out. Moving to State 0");
         resetState();
       }

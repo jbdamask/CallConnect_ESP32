@@ -3,10 +3,22 @@ const char *CLIENT_ID= "<device id>";
 const char *AP_PASSWORD = "<access point password>";
 const uint8_t NUMPIXELS1 = <num pixels>;
 
-// IoT broker
-const char *awsEndPoint = "<endpoint>";
+/************************ Adafruit IO Config *******************************/
+// visit io.adafruit.com if you need to create an account,
+// or if you need your Adafruit IO key.
+const char *IO_USERNAME = "AIO_USERNAME"
+const char *IO_KEY = "AIO_KEY"
 const char *mqttTopic = "<mqtt topic>";
 
 // Sensible defaults
 const long RESET_AFTER = 1800000;  // 0.5 hour in milliseconds
 const long LONG_PRESS_DURATION = 5000; // Used for long button push to restart the ESP chip
+
+
+/******************************* WIFI **************************************/
+#define WIFI_SSID "your_ssid"
+#define WIFI_PASS "your_pass"
+
+#include "AdafruitIO_WiFi.h"
+AdafruitIO_WiFi io(IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS);
+AdafruitIO_Feed *topic;

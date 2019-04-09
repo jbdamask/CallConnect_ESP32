@@ -6,15 +6,11 @@
  * Notes: Good first pass. Issues with NeoPixels
  */
 
-#include "WiFiManager.h" // https://github.com/tzapu/WiFiManager
-#include <WiFiClientSecure.h>
-#include <MQTTClient.h>   //you need to install this library: https://github.com/256dpi/arduino-mqtt
 #include <NeoPixelBrightnessBus.h>
 #include <NeoPixelAnimator.h>
 #include <ArduinoJson.h>
 #include "AceButton.h"
 #include "Config.h"
-#include "certificates.h"
 #include "esp32-hal-cpu.h"  // For CPU speed configuration http://bbs.esp32.com/viewtopic.php?f=19&t=9289
 
 using namespace ace_button;
@@ -25,16 +21,16 @@ using namespace ace_button;
 
 
 /* AWS IOT -----*/
-int tick=0,msgCount=0,msgReceived = 0;
-int status = WL_IDLE_STATUS;    // Connection status
-char payload[512];  // Payload array to store thing shadow JSON document
-char rcvdPayload[512];
-int counter = 0;    // Counter for iteration
-WiFiClientSecure net;
-MQTTClient client;
+// int tick=0,msgCount=0,msgReceived = 0;
+// int status = WL_IDLE_STATUS;    // Connection status
+// int counter = 0;    // Counter for iteration
+// WiFiClientSecure net;
+// MQTTClient client;
 
 /* JSON -----*/
 #define JSON_BUFFER_SIZE  512
+char payload[JSON_BUFFER_SIZE];  // Payload array to store thing shadow JSON document
+char rcvdPayload[JSON_BUFFER_SIZE];
 
 /* NeoPixel stuff -----*/
 // Number of pixels in Config.h
@@ -79,11 +75,14 @@ unsigned long lastUpdate = 0, idleTimer = 0, resetTimer = 0; // for millis() whe
 
 /* Timing stuff -----*/
 long countDown = 0;  // Counts down a certain number of seconds before taking action (for certain states)
-#define IDLE_TIMEOUT    5000   // Milliseconds that there can be no touch or ble input before reverting to idle state
+const long IDLE_TIMEOUT = 20000;   // Milliseconds that there can be no touch or ble input before reverting to idle state
+const long CONNECTION_TIMEOUT = 600000; // Duration in milliseconds that we'll remain connected (instead of forever)
+const long HANGUP_TIMEOUT = 10000;  // Duration in milliseconds to display our "hanging up" animation
 
 /* WiFi -----*/
-WiFiManager wm; // global wm instance
-bool res;       // Boolean letting us know if we can connect to saved WiFi
+//WiFiManager wm; // global wm instance
+//bool res;       // Boolean letting us know if we can connect to saved WiFi
+
 
 /* Button stuff -----*/
 ButtonConfig buttonStateConfig;
@@ -345,83 +344,89 @@ void  updatePattern(int pat){
 *   ====================================================================  */
 
 // Clears memory of any previously joined networks and starts access point
-bool resetWiFi(){
-  wm.resetSettings();
-  ESP.restart();
-  // start portal w delay
-  Serial.println("Starting config portal");
-  //wm.setConfigPortalTimeout(120);      
-  if (!wm.startConfigPortal(CLIENT_ID, AP_PASSWORD)) {
-    Serial.println("failed to connect or hit timeout");
-    delay(3000);
-    return false;
-  } else {
-    //if you get here you have connected to the WiFi
-    Serial.println("connected...yeey :)");
-    res = true;
-    return true;
-  } 
-}
+// bool resetWiFi(){
+// //  wm.resetSettings();
+//   ESP.restart();
+//   // // start portal w delay
+//   // Serial.println("Starting config portal");
+//   // //wm.setConfigPortalTimeout(120);      
+//   // if (!wm.startConfigPortal(CLIENT_ID, AP_PASSWORD)) {
+//   //   Serial.println("failed to connect or hit timeout");
+//   //   delay(3000);
+//   //   return false;
+//   // } else {
+//   //   //if you get here you have connected to the WiFi
+//   //   Serial.println("connected...yeey :)");
+//   //   res = true;
+//   //   return true;
+//   // } 
+// }
 
 // Restarts the WiFi chip and reconnects to AWS
 // This can be used when device moves to new network or when gremlins strike
+// void restartAndConnect(){
+//   client.disconnect();
+//   ESP.restart();
+//   connectWiFI();
+//   connect();
+// }
+
 void restartAndConnect(){
-  client.disconnect();
   ESP.restart();
-  connectWiFI();
-  connect();
+  AdafruitIO_WiFi io(IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS);
+  AdafruitIO_Feed *topic = io.feed("pillows");
 }
 
-// Connect to AWS IoT service and subscribe to MQTT topic
-void connect(){
-    if(!awsConnect()){ // Return immediately if we can't connect to AWS
-      return;
-    } 
-    state = 5;  // Animation tied to this state shows user we're good to go
-    countDown = millis();   // Set the timer so we show the animation for the right amount of time
-}
+// // Connect to AWS IoT service and subscribe to MQTT topic
+// void connect(){
+//     if(!awsConnect()){ // Return immediately if we can't connect to AWS
+//       return;
+//     } 
+//     state = 5;  // Animation tied to this state shows user we're good to go
+//     countDown = millis();   // Set the timer so we show the animation for the right amount of time
+// }
 
-bool awsConnect(){
-  static int awsConnectTimer = 0;
-  static bool printOnce = false;
-  int awsConnectTimout = 10000;
-  net.setCACert(rootCABuff);
-  net.setCertificate(certificateBuff);
-  net.setPrivateKey(privateKeyBuff);
-  // Changes the keep alive interval to match aws's SDK default (https://docs.aws.amazon.com/general/latest/gr/aws_service_limits.html#limits_iot)
-  // I'm hoping this reduces the number of disconnects I'm seeing
-  client.setOptions(1200, true, 1000);  
-  client.begin(awsEndPoint, 8883, net);
-  if(!printOnce) Serial.print("\nConnecting to AWS MQTT broker");
-  while (!client.connect(CLIENT_ID)) {
-    if(awsConnectTimer == 0) awsConnectTimer = millis();
-    if (millis() - awsConnectTimer > awsConnectTimout) {
-      if(!printOnce) {
-        Serial.println("CONNECTION FAILURE: Could not connect to aws");
-        printOnce = true;
-      }
+// bool awsConnect(){
+//   static int awsConnectTimer = 0;
+//   static bool printOnce = false;
+//   int awsConnectTimout = 10000;
+//   net.setCACert(rootCABuff);
+//   net.setCertificate(certificateBuff);
+//   net.setPrivateKey(privateKeyBuff);
+//   // Changes the keep alive interval to match aws's SDK default (https://docs.aws.amazon.com/general/latest/gr/aws_service_limits.html#limits_iot)
+//   // I'm hoping this reduces the number of disconnects I'm seeing
+//   client.setOptions(1200, true, 1000);  
+//   client.begin(awsEndPoint, 8883, net);
+//   if(!printOnce) Serial.print("\nConnecting to AWS MQTT broker");
+//   while (!client.connect(CLIENT_ID)) {
+//     if(awsConnectTimer == 0) awsConnectTimer = millis();
+//     if (millis() - awsConnectTimer > awsConnectTimout) {
+//       if(!printOnce) {
+//         Serial.println("CONNECTION FAILURE: Could not connect to aws");
+//         printOnce = true;
+//       }
 
-      return false;
-    }
-    Serial.print(".");
-    delay(100);
-  }
-  Serial.println("Connected to AWS"); 
-  awsConnectTimer = 0;
-  // Now subscribe to MQTT topic
-  if(!client.subscribe(mqttTopic)) {
-    Serial.println("CONNECTION FAILURE: Could not subscribe to MQTT topic");
-    return false;
-  }
-  client.onMessage(messageReceived);
-  return true;
-}
+//       return false;
+//     }
+//     Serial.print(".");
+//     delay(100);
+//   }
+//   Serial.println("Connected to AWS"); 
+//   awsConnectTimer = 0;
+//   // Now subscribe to MQTT topic
+//   if(!client.subscribe(mqttTopic)) {
+//     Serial.println("CONNECTION FAILURE: Could not subscribe to MQTT topic");
+//     return false;
+//   }
+//   client.onMessage(messageReceived);
+//   return true;
+// }
 
 void publish(String state){ // Isn't state global? If so, no need to pass
-  char msg[50];
-  static int value = 0;
-  int NUM_RETRIES = 10;
-  int cnt = 0;
+  //char msg[50];
+  //static int value = 0;
+  //int NUM_RETRIES = 10;
+  //int cnt = 0;
   Serial.println("Function: publish()");
   StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
@@ -430,65 +435,76 @@ void publish(String state){ // Isn't state global? If so, no need to pass
   String sJson = "";
   root.printTo(sJson);
   char* cJson = &sJson[0u];
-  if(!client.connected()){
-    Serial.println("PUBLISH ERROR: Client not connected");
-  }
-  if(!client.publish(mqttTopic, cJson)){    
-   Serial.println("PUBLISH ERROR: Publish failed");
-   Serial.print("  Topic: "); Serial.println(mqttTopic);
-   Serial.print("  Message: "); Serial.println(cJson);
-  }
+  //topic->save(cJson);
+  topic->save("wtf");
+  // if(!client.connected()){
+  //   Serial.println("PUBLISH ERROR: Client not connected");
+  // }
+  // if(!client.publish(mqttTopic, cJson)){    
+  //  Serial.println("PUBLISH ERROR: Publish failed");
+  //  Serial.print("  Topic: "); Serial.println(mqttTopic);
+  //  Serial.print("  Message: "); Serial.println(cJson);
+  // }
 }
 
-// AWS MQTT callback handler
-void messageReceived(String &topic, String &payload) {
-  Serial.println("incoming: " + topic + " - " + payload);
-    StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-    JsonObject& root = jsonBuffer.parseObject(payload);
-    const char* d = root["thing_name"];
-    const char* s = root["state"];    
-    Serial.println(String(d));
-    if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
-    Serial.println("    Message is from another device. Printing...");
-    Serial.print("State value: "); Serial.println(s);
+// // AWS MQTT callback handler
+// void messageReceived(String &topic, String &payload) {
+//   Serial.println("incoming: " + topic + " - " + payload);
+//     StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+//     JsonObject& root = jsonBuffer.parseObject(payload);
+//     const char* d = root["thing_name"];
+//     const char* s = root["state"];    
+//     Serial.println(String(d));
+//     if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
+//     Serial.println("    Message is from another device. Printing...");
+//     Serial.print("State value: "); Serial.println(s);
 
-    if(strcmp(s,"0")==0){  
-        state = 0;
-    }else if(strcmp(s,"1")==0){
-        state = 1;
-    }else if(strcmp(s,"2")==0){
-        state = 2;
-    }else if(strcmp(s,"3")==0){
-        state = 3;
-        countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
-    }    
+//     if(strcmp(s,"0")==0){  
+//         state = 0;
+//     }else if(strcmp(s,"1")==0){
+//         state = 1;
+//     }else if(strcmp(s,"2")==0){
+//         state = 2;
+//     }else if(strcmp(s,"3")==0){
+//         state = 3;
+//         countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
+//     }    
+// }
+
+// // Connects to known WiFi or launches access point if none available
+// void connectWiFI(){
+//   WiFi.disconnect(true); // Just in case we're connected
+//   Serial.println("Trying to reconnect to known wifi...");
+//   // Set this in order for loop() to keep running
+//   wm.setConfigPortalBlocking(false);
+//   wm.setSaveParamsCallback(wifiConnectedCallback);
+//   // Initiatize WiFiManager
+//   res = wm.autoConnect(CLIENT_ID, AP_PASSWORD); // password protected ap
+//   //wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
+//   // Seeing if we can re-connect to known WiFi
+//   if(!res) {
+//       Serial.println("Failed to connect to WiFi. Starting access point");
+//       state = 4;  // Show SoftAP animation
+//   } 
+//   else {
+//       //if you get here you have connected to the WiFi    
+//       Serial.println("connected to wifi :)");
+//   }
+// }
+
+// void wifiConnectedCallback(){
+//   Serial.println("Successfully connected to WiFi");
+//   res = true;
+// }
+
+
+// this function is called whenever a 'counter' message
+// is received from Adafruit IO. it was attached to
+// the counter feed in the setup() function above.
+void handleMessage(AdafruitIO_Data *data) {
+  Serial.println(data->value());
 }
 
-// Connects to known WiFi or launches access point if none available
-void connectWiFI(){
-  WiFi.disconnect(true); // Just in case we're connected
-  Serial.println("Trying to reconnect to known wifi...");
-  // Set this in order for loop() to keep running
-  wm.setConfigPortalBlocking(false);
-  wm.setSaveParamsCallback(wifiConnectedCallback);
-  // Initiatize WiFiManager
-  res = wm.autoConnect(CLIENT_ID, AP_PASSWORD); // password protected ap
-  //wm.setConfigPortalTimeout(30); // auto close configportal after n seconds
-  // Seeing if we can re-connect to known WiFi
-  if(!res) {
-      Serial.println("Failed to connect to WiFi. Starting access point");
-      state = 4;  // Show SoftAP animation
-  } 
-  else {
-      //if you get here you have connected to the WiFi    
-      Serial.println("connected to wifi :)");
-  }
-}
-
-void wifiConnectedCallback(){
-  Serial.println("Successfully connected to WiFi");
-  res = true;
-}
 
 void setup() {
     // @TODO
@@ -507,26 +523,38 @@ void setup() {
     resetBrightness();// These things are bright!
     updatePattern(state);
 
-    if(debug){
-      resetWiFi();
-    }
-    connectWiFI();
+    // if(debug){
+    //   resetWiFi();
+    // }
+    // connectWiFI();
     
+    // connect to io.adafruit.com
+    //io.connect();
+    // set up the 'mqtt topic' feed
+    //AdafruitIO_Feed *topic = io.feed(mqtt_topic);
+    //topic = io.feed(mqtt_topic);
+
+
+    // set up a message handler for our feed.
+    // the handleMessage function (defined below)
+    // will be called whenever a message is
+    // received from adafruit io.
+    topic->onMessage(handleMessage);
 
     // Start the reset countdown
     resetTimer = millis();  
 }
 
 void loop(){
-  wm.process(); // Needed for loop to run when WiFiManager is in SoftAP mode
-  client.loop();
+ // wm.process(); // Needed for loop to run when WiFiManager is in SoftAP mode
+ // client.loop();
 
-  // Make sure we're still connected
-  if(res){
-    if(!client.connected()){
-      connect();
-    }
-  }
+  // // Make sure we're still connected
+  // if(res){
+  //   if(!client.connected()){
+  //     connect();
+  //   }
+  // }
   
   bool static toldUs = false; // When in state 1, we're either making or receiving a call
   isTouched = false;  // Reset unless there's a touch event

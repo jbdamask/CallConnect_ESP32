@@ -1,42 +1,37 @@
 # CallConnect_ESP32
 
-ESP32 board communciation via AWS IoT MQTT
+ESP32 board communciation via Adafruit.io
 
 ## Getting Started
 
-This is a quickly evolving example. It combines several common libraries to control LED animations locally, and send the state information to AWS. Topic subscribers will receive the state information and can act as they need.
+This code lets devices share state information passed through adafruit.io
 
-Edit Config.h.example and certificates.h.example to meet your specific needs and save as Config.h and certificates.h
+Edit Config.h.template to meet your specific needs and save as Config.h
 
 ### Hardware
 
 * [Adafruit Feather HUZZAH ESP32](https://www.adafruit.com/product/3405)
 * RGB NeoPixels
 * MicroUSB cable for flashing board
+* Battery (I use the [RAVPower 6700mAh USB power bank](https://www.ravpower.com/p/ravpower-ace-6700mah-power-bank-with-ismart-technology.html))
 
 ### Libraries
 
-* WiFIManager - As of January 31, 2019 this _must_ be the [development branch](https://github.com/tzapu/WiFiManager/tree/development) in order for ESP32 boards to work
-* [WiFiClientSecure](https://github.com/espressif/arduino-esp32/tree/master/libraries/WiFiClientSecure)
+* [Adafruit IO Arduino](https://learn.adafruit.com/adafruit-io-basics-esp8266-arduino/arduino-io-library)
 * [AceButton](https://github.com/bxparks/AceButton)
 * [NeoPixelBus](https://github.com/Makuna/NeoPixelBus/wiki)
-* [Arduino-mqtt](https://github.com/256dpi/arduino-mqtt)
 * [ArduinoJSON](https://arduinojson.org/)
 
-### Helpful Sites
-
-* Check out the [AWS IOT Workshop](https://github.com/aws-samples/aws-iot-workshop)
 
 ## Authors
 
-* **John Damask** (standing on the shoulders of giants (i.e. library makers))
+* **John Damask** 
+* All the great people who made their libraries available
 
 
 ## Acknowledgments
 
 * [Adafruit](https://adafruit.com)
-* [Shawn Alverson](https://github.com/tablatronix) from Tabletronix for the awesome WiFiManager
 * [Brian Park](https://github.com/bxparks) for AceButton
-* [AWS IoT](https://aws.amazon.com/iot/?nc=sn&loc=0)
 * [These dudes](https://github.com/bblanchon/ArduinoJson/graphs/contributors) for the ArduinoJSON library
 * Michael Miller for NeoPixelBus library

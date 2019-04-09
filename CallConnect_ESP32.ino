@@ -612,7 +612,8 @@ void loop(){
         idleTimer = millis();
       } else {  // If nothing going on, and nothing has gone on for a while, proactively restart the chip
         if(millis() - resetTimer > RESET_AFTER){
-          ESP.restart();
+          //ESP.restart(); // hmmmm...there's probably a reason i didn't gracefully disconnect but don't know why.
+          restartAndConnect();
         }
       }
       break;

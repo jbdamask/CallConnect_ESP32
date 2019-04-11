@@ -455,22 +455,23 @@ bool awsConnect(){
 }
 
 String createPayload(int et){
-  StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
+  const int capacity = JSON_OBJECT_SIZE(5); // big enough for both payload types
+  StaticJsonDocument<capacity> root;  
   String sJson = "";
   root["thing_name"] = String(CLIENT_ID);
   switch(et){
     case LIGHTS:
       root["state"] = state;  // state is global
       break;
-    case TEMPERATURE:
+    case TEMPERATURE:      
       root["temperature"] = int (averageTemperature); // AverageTemperature is global. The cast truncates the value but I'm cool with that
       root["statistic"] = "Average";
       root["unit"] = "Farenheit";
       root["period_in_seconds"]  = (TEMPERATURE_READS_TO_AVERAGE * TEMPERATURE_READ_INTERVAL) / 1000;
       break;
   }
-  root.printTo(sJson);
+  //root.printTo(sJson);
+  serializeJson(root, sJson);
   return sJson;
 }
 
@@ -488,27 +489,26 @@ void publish(String topic, String payload){
 
 // AWS MQTT callback handler
 void messageReceived(String &topic, String &payload) {
+    const int capacity = JSON_OBJECT_SIZE(5); 
+    StaticJsonDocument<capacity> root;
+    DeserializationError err = deserializeJson(root, payload);
+    if (err) {
+      Serial.print(F("deserializeJson() failed with code ")); 
+      Serial.println(err.c_str());
+      return;
+    }
 
-    StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-    JsonObject& root = jsonBuffer.parseObject(payload);
     const char* d = root["thing_name"];
     if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
     Serial.println("incoming: " + topic + " - " + payload);
     Serial.println(String(d));
-    const char* s = root["state"];    
+    //const char* s = root["state"];    
+    uint8_t s = root["state"];
     Serial.println("    Message is from another device. Printing...");
-    Serial.print("State value: "); Serial.println(s);
+    Serial.print("State value: "); Serial.println(String(s));
 
-    if(strcmp(s,"0")==0){  
-        state = 0;
-    }else if(strcmp(s,"1")==0){
-        state = 1;
-    }else if(strcmp(s,"2")==0){
-        state = 2;
-    }else if(strcmp(s,"3")==0){
-        state = 3;
-        countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
-    }    
+    state = s;
+    if(state == 3) countDown = millis(); // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
 }
 
 // Connects to known WiFi or launches access point if none available

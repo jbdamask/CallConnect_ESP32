@@ -19,19 +19,12 @@
 
 using namespace ace_button;
 
-/* Pins -----*/
-#define PIN_STATE     27    // Button pin for changing state
-#define PIN_NEOPIXEL   12    // pin connected to the small NeoPixels strip
-
-/* JSON -----*/
-#define JSON_BUFFER_SIZE  512
-
 /* AWS IOT -----*/
-int tick=0,msgCount=0,msgReceived = 0;
-int status = WL_IDLE_STATUS;    // Connection status
+//int tick=0,msgCount=0,msgReceived = 0;
+//int status = WL_IDLE_STATUS;    // Connection status
 char payload[512];  // Payload array to store thing shadow JSON document
-char rcvdPayload[512];
-int counter = 0;    // Counter for iteration
+//char rcvdPayload[512];
+//int counter = 0;    // Counter for iteration
 WiFiClientSecure net;
 MQTTClient client(JSON_BUFFER_SIZE);
 
@@ -58,9 +51,7 @@ NeoGamma<NeoGammaTableMethod> colorGamma; // for any fade animations, best to co
 NeoPixelBrightnessBus<NeoGrbFeature, Neo800KbpsMethod> strip(NUMPIXELS1, PIN_NEOPIXEL);
 const uint8_t AnimationChannels = 1; // we only need one as all the pixels are animated at once for breathing
 NeoPixelAnimator animations(AnimationChannels); // NeoPixel animation management object
-
 NeoPixelAnimator ringAnimation(AnimationChannels); // NeoPixel animation management object
-
 boolean fadeToColor = true;  // general purpose variable used to store effect state
 // what is stored for state is specific to the need, in this case, the colors.
 // basically what ever you need inside the animation update function
@@ -78,10 +69,6 @@ unsigned long lastUpdate = 0, idleTimer = 0, resetTimer = 0; // for millis() whe
 
 /* Timing stuff -----*/
 long countDown = 0;  // Counts down a certain number of seconds before taking action (for certain states)
-//#define IDLE_TIMEOUT    5000   // Milliseconds that there can be no touch or ble input before reverting to idle state
-const long IDLE_TIMEOUT =  20000;   // Duration in milliseconds that there can be no touch or ble input before reverting to idle state
-const long CONNECTION_TIMEOUT = 600000; // Duration in milliseconds that we'll remain connected (instead of forever)
-const long HANGUP_TIMEOUT = 10000;  // Duration in milliseconds to display our "hanging up" animation
 
 /* WiFi -----*/
 WiFiManager wm; // global wm instance
@@ -91,11 +78,11 @@ bool res;       // Boolean letting us know if we can connect to saved WiFi
 ButtonConfig buttonStateConfig;
 AceButton buttonState(&buttonStateConfig);
 void handleButtonPush(AceButton*, uint8_t, uint8_t); // function prototype for state button
-
 bool isTouched = false;
 bool previouslyTouched = false;
 bool makingCall = false;    // Keep track of who calls and who receives
 
+/* Misc -----*/
 bool debug = false; // Set to true to clean ESP32 memory
 
 /* Clean house -----*/
@@ -309,38 +296,38 @@ void resetBrightness(){
 }
 
 // Update the animation
-void  updatePattern(int pat){ 
-  switch(pat) {
-    case 0:
-      if(isOff){
-        wipe();
-        strip.Show();
-      }
-      break;
-    case 1: 
-      wipe();
-      sparkle(3);
-      break;     
-    case 2:
-      Serial.println("State 2");
-      breathe(1); // Breathe blue
-      break;
-    case 3:
-      Serial.println("State 3");
-      breathe(2); // Breathe red
-      break;
-    case 4:
-      Serial.println("State 4");
-      breathe(3); // Breathe gold
-      break;
-    case 5:
-      Serial.println("State 5");
-      breathe(4); // Breathe greenish
-    default:
-      // donada
-      break;
-  }  
-}
+// void  updatePattern(int pat){ 
+//   switch(pat) {
+//     case 0:
+//       if(isOff){
+//         wipe();
+//         strip.Show();
+//       }
+//       break;
+//     case 1: 
+//       wipe();
+//       sparkle(3);
+//       break;     
+//     case 2:
+//       Serial.println("State 2");
+//       breathe(1); // Breathe blue
+//       break;
+//     case 3:
+//       Serial.println("State 3");
+//       breathe(2); // Breathe red
+//       break;
+//     case 4:
+//       Serial.println("State 4");
+//       breathe(3); // Breathe gold
+//       break;
+//     case 5:
+//       Serial.println("State 5");
+//       breathe(4); // Breathe greenish
+//     default:
+//       // donada
+//       break;
+//   }  
+// }
 
 /*  ====================================================================  *
 *                               NETWORKING                                *
@@ -510,7 +497,7 @@ void setup() {
     // Initialize NeoPixels
     strip.Begin();
     resetBrightness();// These things are bright!
-    updatePattern(state);
+    //updatePattern(state);
 
     if(debug){
       resetWiFi();

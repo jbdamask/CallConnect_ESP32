@@ -10,3 +10,15 @@ const char *mqttTopic = "<mqtt topic>";
 // Sensible defaults
 const long RESET_AFTER = 1800000;  // 0.5 hour in milliseconds
 const long LONG_PRESS_DURATION = 5000; // Used for long button push to restart the ESP chip
+
+// Pins 
+#define PIN_STATE     27    // Button pin for changing state
+#define PIN_NEOPIXEL   12    // pin connected to the small NeoPixels strip
+
+// JSON buffer
+#define JSON_BUFFER_SIZE  512
+
+// Timeouts
+const long IDLE_TIMEOUT =  20000;   // Duration in milliseconds that there can be no touch or ble input before reverting to idle state
+const long CONNECTION_TIMEOUT = 600000; // Duration in milliseconds that we'll remain connected (instead of forever)
+const long HANGUP_TIMEOUT = 10000;  // Duration in milliseconds to display our "hanging up" animation

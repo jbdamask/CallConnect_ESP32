@@ -23,6 +23,8 @@ using namespace ace_button;
 #define PIN_STATE     27    // Button pin for changing state
 #define PIN_NEOPIXEL   12    // pin connected to the small NeoPixels strip
 
+/* JSON -----*/
+#define JSON_BUFFER_SIZE  512
 
 /* AWS IOT -----*/
 int tick=0,msgCount=0,msgReceived = 0;
@@ -31,10 +33,7 @@ char payload[512];  // Payload array to store thing shadow JSON document
 char rcvdPayload[512];
 int counter = 0;    // Counter for iteration
 WiFiClientSecure net;
-MQTTClient client;
-
-/* JSON -----*/
-#define JSON_BUFFER_SIZE  512
+MQTTClient client(JSON_BUFFER_SIZE);
 
 /* NeoPixel stuff -----*/
 // Number of pixels in Config.h
@@ -79,7 +78,10 @@ unsigned long lastUpdate = 0, idleTimer = 0, resetTimer = 0; // for millis() whe
 
 /* Timing stuff -----*/
 long countDown = 0;  // Counts down a certain number of seconds before taking action (for certain states)
-#define IDLE_TIMEOUT    5000   // Milliseconds that there can be no touch or ble input before reverting to idle state
+//#define IDLE_TIMEOUT    5000   // Milliseconds that there can be no touch or ble input before reverting to idle state
+const long IDLE_TIMEOUT =  20000;   // Duration in milliseconds that there can be no touch or ble input before reverting to idle state
+const long CONNECTION_TIMEOUT = 600000; // Duration in milliseconds that we'll remain connected (instead of forever)
+const long HANGUP_TIMEOUT = 10000;  // Duration in milliseconds to display our "hanging up" animation
 
 /* WiFi -----*/
 WiFiManager wm; // global wm instance
@@ -101,7 +103,7 @@ void resetState(){
   state = 0;
   previouslyTouched = false;
   makingCall = false;
-  publish(String(state));
+  publish();
 }
 
 /*  ====================================================================  *
@@ -417,51 +419,54 @@ bool awsConnect(){
   return true;
 }
 
-void publish(String state){ // Isn't state global? If so, no need to pass
-  char msg[50];
-  static int value = 0;
-  int NUM_RETRIES = 10;
-  int cnt = 0;
+void publish(){ // Isn't state global? If so, no need to pass
+  //char msg[50];
+  //static int value = 0;
+  //int NUM_RETRIES = 10;
+  //int cnt = 0;
   Serial.println("Function: publish()");
-  StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
+  const int capacity = JSON_OBJECT_SIZE(5); 
+  StaticJsonDocument<capacity> root;  
+  String sJson = "";
+  // StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+  // JsonObject& root = jsonBuffer.createObject();
   root["thing_name"] = String(CLIENT_ID);
   root["state"] = state;
-  String sJson = "";
-  root.printTo(sJson);
-  char* cJson = &sJson[0u];
+  serializeJson(root, sJson);
+  //root.printTo(sJson);
+  //char* cJson = &sJson[0u];
   if(!client.connected()){
     Serial.println("PUBLISH ERROR: Client not connected");
   }
-  if(!client.publish(mqttTopic, cJson)){    
-   Serial.println("PUBLISH ERROR: Publish failed");
-   Serial.print("  Topic: "); Serial.println(mqttTopic);
-   Serial.print("  Message: "); Serial.println(cJson);
+  if(!client.publish(mqttTopic, &sJson[0u])){    
+    Serial.println("PUBLISH ERROR: Publish failed");
+    Serial.print("  Topic: "); Serial.println(mqttTopic);
+    Serial.print("  Message: "); Serial.println(sJson);
   }
 }
 
 // AWS MQTT callback handler
 void messageReceived(String &topic, String &payload) {
   Serial.println("incoming: " + topic + " - " + payload);
-    StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-    JsonObject& root = jsonBuffer.parseObject(payload);
+  const int capacity = JSON_OBJECT_SIZE(5); 
+  StaticJsonDocument<capacity> root;
+  DeserializationError err = deserializeJson(root, payload);
+  if (err) {
+    Serial.print(F("deserializeJson() failed with code ")); 
+    Serial.println(err.c_str());
+    return;
+  }  
+    // StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+    // JsonObject& root = jsonBuffer.parseObject(payload);
     const char* d = root["thing_name"];
-    const char* s = root["state"];    
-    Serial.println(String(d));
-    if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore
+    if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore    
+    //const char* s = root["state"];    
+    uint8_t s = root["state"];
     Serial.println("    Message is from another device. Printing...");
-    Serial.print("State value: "); Serial.println(s);
+    Serial.print("State value: "); Serial.println(String(s));        
+    state = s;
+    if(state == 3) countDown = millis(); // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
 
-    if(strcmp(s,"0")==0){  
-        state = 0;
-    }else if(strcmp(s,"1")==0){
-        state = 1;
-    }else if(strcmp(s,"2")==0){
-        state = 2;
-    }else if(strcmp(s,"3")==0){
-        state = 3;
-        countDown = millis();   // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
-    }    
 }
 
 // Connects to known WiFi or launches access point if none available
@@ -538,10 +543,15 @@ void loop(){
       wipe();
       if(state != 0 ) resetBrightness();      
       strip.Show();
-      previousState = state;
+      // previousState = state;
+      // isOff = (state == 0) ? true : false;
+      // ringAnimation.StopAll();
+      // resetTimer = millis();  // If state change is registered, things are working. Reset the timer
       isOff = (state == 0) ? true : false;
       ringAnimation.StopAll();
       resetTimer = millis();  // If state change is registered, things are working. Reset the timer
+      if(state==2) countDown = millis();  // If we've moved to a connected state then set the timeout timer
+      previousState = state;      
   }
 
   // The various cases we can face
@@ -549,14 +559,15 @@ void loop(){
     case 0: // idle 
       if(isTouched && state != 4){ // Only register touch event if we're not in SoftAP mode
         state = 1;
-        publish(String(state));   // TODO - make sure String is the right type for state in the payload
+        publish(); 
         previouslyTouched = true;
         makingCall = true;
         Serial.println("Calling...");
         idleTimer = millis();
       } else {  // If nothing going on, and nothing has gone on for a while, proactively restart the chip
         if(millis() - resetTimer > RESET_AFTER){
-          ESP.restart();
+          //ESP.restart(); // hmmmm...there's probably a reason i didn't gracefully disconnect but don't remember why.
+          restartAndConnect();
         }
       }
       break;
@@ -575,7 +586,7 @@ void loop(){
           }
       } else if(isTouched){  // If we're receiving a call, are now are touching the local device, then we're connected
           state = 2;
-          publish(String(state));
+          publish();
           previouslyTouched = true;
       }
       break;
@@ -591,13 +602,20 @@ void loop(){
       if(isTouched){    // Touch again to disconnect
           Serial.println("State 2. Button pushed. Moving to State 3");
           state = 3;
-          publish(String(state));
+          publish();
           previouslyTouched = false;
       }
       if(state == 3) {
           Serial.println("Disconnecting. Starting count down timer.");
           countDown = millis();   // Start the timer
-      }      
+      }     
+      if(millis() - countDown > CONNECTION_TIMEOUT){
+        Serial.println("State 2 connection timed out. Moving to State 3");
+        state = 3;
+        publish();
+        previouslyTouched = false;       
+        countDown = millis(); 
+      }       
       break;
     case 3: // Disconnecting
       if (animations.IsAnimating()){
@@ -608,13 +626,13 @@ void loop(){
           Serial.println("Starting to breathe red");
           FadeInFadeOutRinseRepeat(RgbColor(255,0,0));
       }    
-      if(millis() - countDown > IDLE_TIMEOUT) {
+      if(millis() - countDown > HANGUP_TIMEOUT) { // Show 
           Serial.println("State 3. Timed out. Moving to State 0");
           resetState();
       }
       if(isTouched && previouslyTouched == false){  // If we took our hand off but put it back on in under the time limit, re-connect
           state = 2;
-          publish("2");
+          publish();
           previouslyTouched = true;
       }    
       break;
@@ -639,7 +657,7 @@ void loop(){
         float hue = 120/360.0f;
         roundy(hue); // Hue of 120 is green
       }
-      if(millis() - countDown > (IDLE_TIMEOUT)) { // Show we're connected for just a few seconds
+      if(millis() - countDown > (IDLE_TIMEOUT / 6)) { // Show we're connected for just a few seconds
         Serial.println("State 5. Timed out. Moving to State 0");
         resetState();
       }

@@ -295,40 +295,6 @@ void resetBrightness(){
     strip.SetBrightness(BRIGHTNESS);
 }
 
-// Update the animation
-// void  updatePattern(int pat){ 
-//   switch(pat) {
-//     case 0:
-//       if(isOff){
-//         wipe();
-//         strip.Show();
-//       }
-//       break;
-//     case 1: 
-//       wipe();
-//       sparkle(3);
-//       break;     
-//     case 2:
-//       Serial.println("State 2");
-//       breathe(1); // Breathe blue
-//       break;
-//     case 3:
-//       Serial.println("State 3");
-//       breathe(2); // Breathe red
-//       break;
-//     case 4:
-//       Serial.println("State 4");
-//       breathe(3); // Breathe gold
-//       break;
-//     case 5:
-//       Serial.println("State 5");
-//       breathe(4); // Breathe greenish
-//     default:
-//       // donada
-//       break;
-//   }  
-// }
-
 /*  ====================================================================  *
 *                               NETWORKING                                *
 *   ====================================================================  */
@@ -406,22 +372,14 @@ bool awsConnect(){
   return true;
 }
 
-void publish(){ // Isn't state global? If so, no need to pass
-  //char msg[50];
-  //static int value = 0;
-  //int NUM_RETRIES = 10;
-  //int cnt = 0;
+void publish(){ 
   Serial.println("Function: publish()");
   const int capacity = JSON_OBJECT_SIZE(5); 
   StaticJsonDocument<capacity> root;  
   String sJson = "";
-  // StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-  // JsonObject& root = jsonBuffer.createObject();
   root["thing_name"] = String(CLIENT_ID);
   root["state"] = state;
   serializeJson(root, sJson);
-  //root.printTo(sJson);
-  //char* cJson = &sJson[0u];
   if(!client.connected()){
     Serial.println("PUBLISH ERROR: Client not connected");
   }
@@ -443,17 +401,14 @@ void messageReceived(String &topic, String &payload) {
     Serial.println(err.c_str());
     return;
   }  
-    // StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
-    // JsonObject& root = jsonBuffer.parseObject(payload);
-    const char* d = root["thing_name"];
-    if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore    
-    //const char* s = root["state"];    
-    uint8_t s = root["state"];
-    Serial.println("    Message is from another device. Printing...");
-    Serial.print("State value: "); Serial.println(String(s));        
-    state = s;
-    if(state == 3) countDown = millis(); // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
-
+  const char* d = root["thing_name"];
+  if(strcmp(d, CLIENT_ID)==0) return; // If we're receiving our own message, ignore    
+  //const char* s = root["state"];    
+  uint8_t s = root["state"];
+  Serial.println("    Message is from another device. Printing...");
+  Serial.print("State value: "); Serial.println(String(s));        
+  state = s;
+  if(state == 3) countDown = millis(); // Set the timer so that the device receiving the countdown message shows the animation for the right amount of time
 }
 
 // Connects to known WiFi or launches access point if none available
@@ -497,7 +452,6 @@ void setup() {
     // Initialize NeoPixels
     strip.Begin();
     resetBrightness();// These things are bright!
-    //updatePattern(state);
 
     if(debug){
       resetWiFi();
@@ -530,10 +484,6 @@ void loop(){
       wipe();
       if(state != 0 ) resetBrightness();      
       strip.Show();
-      // previousState = state;
-      // isOff = (state == 0) ? true : false;
-      // ringAnimation.StopAll();
-      // resetTimer = millis();  // If state change is registered, things are working. Reset the timer
       isOff = (state == 0) ? true : false;
       ringAnimation.StopAll();
       resetTimer = millis();  // If state change is registered, things are working. Reset the timer
@@ -553,7 +503,6 @@ void loop(){
         idleTimer = millis();
       } else {  // If nothing going on, and nothing has gone on for a while, proactively restart the chip
         if(millis() - resetTimer > RESET_AFTER){
-          //ESP.restart(); // hmmmm...there's probably a reason i didn't gracefully disconnect but don't remember why.
           restartAndConnect();
         }
       }

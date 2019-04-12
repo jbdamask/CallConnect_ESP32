@@ -16,11 +16,11 @@ cwd = os.path.split(os.getcwd())[1]
 with open("Config.h.template", "r") as file:
 	filedata = file.read()
 
-filedata = filedata.replace('<device id>', cwd)
-filedata = filedata.replace('<access point password>', sys.argv[1])
-filedata = filedata.replace('<num pixels>', sys.argv[2])
-filedata = filedata.replace('<endpoint>', sys.argv[3])
-filedata = filedata.replace('<mqtt topic>', sys.argv[4])
+filedata = filedata.replace('|device id|', cwd)
+filedata = filedata.replace('|access point password|', sys.argv[1])
+filedata = filedata.replace('|num pixels|', sys.argv[2])
+filedata = filedata.replace('|endpoint|', sys.argv[3])
+filedata = filedata.replace('|mqtt topic|', sys.argv[4])
 
 with open("Config.h", "w") as file:
 	file.write(filedata)
@@ -45,9 +45,9 @@ privdata = nl("privkey.pem")
 with open("certificates.h.template", "r") as certificates:
 	cdata = certificates.read()
 
-cdata = cdata.replace('<root>', rootdata)
-cdata = cdata.replace('<cert>', certdata)
-cdata = cdata.replace('<priv>', privdata)
+cdata = cdata.replace('|root|', rootdata)
+cdata = cdata.replace('|cert|', certdata)
+cdata = cdata.replace('|priv|', privdata)
 
 
 with open("certificates.h", "w") as wCert:

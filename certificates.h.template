@@ -5,8 +5,8 @@
 // End the last line with: \n
 // Put the array in quotes: ""
 
-const char rootCABuff[] = {"<root>"};
+const char rootCABuff[] = {"|root|"};
 
-const char certificateBuff[] = {"<cert>"};
+const char certificateBuff[] = {"|cert|"};
 
-const char privateKeyBuff[] = {"<priv>"};
+const char privateKeyBuff[] = {"|priv|"};

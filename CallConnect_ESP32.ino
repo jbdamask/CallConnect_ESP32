@@ -174,36 +174,6 @@ void FadeInFadeOutRinseRepeat(RgbColor myColor){
     fadeToColor = !fadeToColor;
 }
 
-// LED breathing. 
-// void breathe(int breatheColor){
-//   Serial.print("Function: breathe(). Color code is: "); Serial.println(breatheColor);
-//   static RgbColor c;
-//   switch(breatheColor){
-//     case 1:
-//       c = RgbColor(0, 127, 127);  // Light blue
-//       break;
-//     case 2:
-//       c = RgbColor(255, 0, 0);    // Red
-//       break;
-//     case 3: 
-//       c = RgbColor(255, 215, 0);  // Gold
-//       break;
-//     case 4:
-//       c = RgbColor(0, 200, 0); // Greenish
-//       break;
-//     if (animations.IsAnimating())
-//     {
-//         // the normal loop just needs these two to run the active animations
-//         animations.UpdateAnimations();
-//         strip.Show();
-//     }
-//     else
-//     {
-//         FadeInFadeOutRinseRepeat(c);
-//     }
-//   }
-// }
-
 // LED sparkling. 
 void sparkle(uint8_t howmany) {
   static int x = 0;
@@ -362,13 +332,14 @@ bool awsConnect(){
   return true;
 }
 
+// Post to MQTT topic
 void publish(){ 
   Serial.println("Function: publish()");
   const int capacity = JSON_OBJECT_SIZE(5); 
   StaticJsonDocument<capacity> root;  
   String sJson = "";
   root["thing_name"] = String(CLIENT_ID);
-  root["state"] = state;
+  root["state"] = state;      // State is global
   serializeJson(root, sJson);
   if(!client.connected()){
     Serial.println("PUBLISH ERROR: Client not connected");
@@ -436,19 +407,14 @@ void setup() {
     Serial.begin(115200);
     Serial.println("\n Starting");
     setCpuFrequencyMhz(80); //Set CPU clock to 80MHz to reduce power draw so battery lasts longer
-
     buttonSetup();
-
     // Initialize NeoPixels
     strip.Begin();
     resetBrightness();// These things are bright!
-
     if(debug){
       resetWiFi();
     }
     connectWiFI();
-    
-
     // Start the reset countdown
     resetTimer = millis();  
 }
@@ -481,7 +447,7 @@ void loop(){
       previousState = state;      
   }
 
-  // The various cases we can face
+  // Here's our state machine
   switch (state){
     case 0: // idle 
       if(isTouched && state != 4){ // Only register touch event if we're not in SoftAP mode

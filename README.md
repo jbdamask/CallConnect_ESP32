@@ -1,6 +1,6 @@
 # CallConnect_ESP32
 
-ESP32 board communciation via AWS IoT MQTT
+ESP32 board communciation via AWS IoT MQTT.
 
 ## Getting Started
 
@@ -29,7 +29,8 @@ Edit Config.h.example and certificates.h.example to meet your specific needs and
 
 ## Authors
 
-* **John Damask** (standing on the shoulders of giants (i.e. library makers))
+* **John Damask** 
+* Library authors (below)
 
 
 ## Acknowledgments

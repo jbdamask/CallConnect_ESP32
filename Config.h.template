@@ -8,7 +8,7 @@ const char *awsEndPoint = "|endpoint|";
 const char *mqttTopic = "|mqtt topic|";
 
 // Sensible defaults
-const long RESET_AFTER = 1800000;  // 0.5 hour in milliseconds
+const long RESET_AFTER = 43200000;  // Automatically restart the chip every n milliseconds
 const long LONG_PRESS_DURATION = 5000; // Used for long button push to restart the ESP chip
 
 // Pins 

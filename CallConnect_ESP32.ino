@@ -1,9 +1,9 @@
 /*
  * Project: CallConnect_ESP32
- * Description: Uses a button to change NeoPixel animation and publish a message.
+ * Description: Uses a button to change NeoPixel animation and publish a message. Receives messages via MQTT. 
  * Author: John B Damask
  * Date: January 30, 2019
- * Notes: Good first pass. Issues with NeoPixels
+ * Notes: Good first pass. Consider porting to aws sdk and FreeRTOS.
  */
 
 #include "WiFiManager.h" // https://github.com/tzapu/WiFiManager
@@ -19,18 +19,15 @@
 
 using namespace ace_button;
 
-/* AWS IOT -----*/
-//int tick=0,msgCount=0,msgReceived = 0;
-//int status = WL_IDLE_STATUS;    // Connection status
-char payload[512];  // Payload array to store thing shadow JSON document
-//char rcvdPayload[512];
-//int counter = 0;    // Counter for iteration
+/* WiFi and MQTT -----*/
+WiFiManager wm; // global wm instance
+bool res;       // Boolean letting us know if we can connect to saved WiFi
 WiFiClientSecure net;
 MQTTClient client(JSON_BUFFER_SIZE);
 
-/* NeoPixel stuff -----*/
-// Number of pixels in Config.h
-#define BRIGHTNESS      255 // Max brightness of NeoPixels
+/* Animations -----
+    I don't fully grok NeoPixelBus animations. Code can probably be trimmed but whatever...
+*/
 #define SPARKLE_SPEED   85 // Speed at which sparkles animate
 unsigned long patternInterval = 20 ; // time between steps in the pattern
 unsigned long animationSpeed [] = { SPARKLE_SPEED } ; // speed for each animation (order counts!)
@@ -63,16 +60,12 @@ struct MyAnimationState
 // one entry per pixel to match the animation timing manager
 MyAnimationState animationState[AnimationChannels];
 
-/* States (1,2,3) ---*/
+/* States ---*/
 uint8_t state = 0, previousState = 0;
 unsigned long lastUpdate = 0, idleTimer = 0, resetTimer = 0; // for millis() when last update occurred
 
 /* Timing stuff -----*/
 long countDown = 0;  // Counts down a certain number of seconds before taking action (for certain states)
-
-/* WiFi -----*/
-WiFiManager wm; // global wm instance
-bool res;       // Boolean letting us know if we can connect to saved WiFi
 
 /* Button stuff -----*/
 ButtonConfig buttonStateConfig;
@@ -182,34 +175,34 @@ void FadeInFadeOutRinseRepeat(RgbColor myColor){
 }
 
 // LED breathing. 
-void breathe(int breatheColor){
-  Serial.print("Function: breathe(). Color code is: "); Serial.println(breatheColor);
-  static RgbColor c;
-  switch(breatheColor){
-    case 1:
-      c = RgbColor(0, 127, 127);  // Light blue
-      break;
-    case 2:
-      c = RgbColor(255, 0, 0);    // Red
-      break;
-    case 3: 
-      c = RgbColor(255, 215, 0);  // Gold
-      break;
-    case 4:
-      c = RgbColor(0, 200, 0); // Greenish
-      break;
-    if (animations.IsAnimating())
-    {
-        // the normal loop just needs these two to run the active animations
-        animations.UpdateAnimations();
-        strip.Show();
-    }
-    else
-    {
-        FadeInFadeOutRinseRepeat(c);
-    }
-  }
-}
+// void breathe(int breatheColor){
+//   Serial.print("Function: breathe(). Color code is: "); Serial.println(breatheColor);
+//   static RgbColor c;
+//   switch(breatheColor){
+//     case 1:
+//       c = RgbColor(0, 127, 127);  // Light blue
+//       break;
+//     case 2:
+//       c = RgbColor(255, 0, 0);    // Red
+//       break;
+//     case 3: 
+//       c = RgbColor(255, 215, 0);  // Gold
+//       break;
+//     case 4:
+//       c = RgbColor(0, 200, 0); // Greenish
+//       break;
+//     if (animations.IsAnimating())
+//     {
+//         // the normal loop just needs these two to run the active animations
+//         animations.UpdateAnimations();
+//         strip.Show();
+//     }
+//     else
+//     {
+//         FadeInFadeOutRinseRepeat(c);
+//     }
+//   }
+// }
 
 // LED sparkling. 
 void sparkle(uint8_t howmany) {
@@ -252,11 +245,8 @@ void sparkle(uint8_t howmany) {
 
 // LED ring
 void roundy(float hue){
-  //  // Initialize if we're not already animating
- //   if(!ringAnimation.IsAnimating()){
-      DrawTailPixels(hue);
-      ringAnimation.StartAnimation(0,66, LoopAnimUpdate);
-   // } 
+  DrawTailPixels(hue);
+  ringAnimation.StartAnimation(0,66, LoopAnimUpdate);
 }
 
 // Used by Roundy

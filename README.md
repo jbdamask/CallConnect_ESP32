@@ -1,18 +1,19 @@
 # CallConnect_ESP32
 
-ESP32 board communciation via AWS IoT MQTT.
+ESP32 board communciation via AWS IoT MQTT. States show as NeoPixel animations.
 
-## Getting Started
+## Description
 
-This is a quickly evolving example. It combines several common libraries to control LED animations locally, and send the state information to AWS. Topic subscribers will receive the state information and can act as they need.
+This code accompanies my Instructables.com post called Web-Connected Glow Pillows. 
 
-Edit Config.h.example and certificates.h.example to meet your specific needs and save as Config.h and certificates.h
+## Components
 
 ### Hardware
 
 * [Adafruit Feather HUZZAH ESP32](https://www.adafruit.com/product/3405)
 * RGB NeoPixels
 * MicroUSB cable for flashing board
+* USB powerbank (I use RavPower 6700mAh)
 
 ### Libraries
 
@@ -23,14 +24,10 @@ Edit Config.h.example and certificates.h.example to meet your specific needs and
 * [Arduino-mqtt](https://github.com/256dpi/arduino-mqtt)
 * [ArduinoJSON](https://arduinojson.org/)
 
-### Helpful Sites
-
-* Check out the [AWS IOT Workshop](https://github.com/aws-samples/aws-iot-workshop)
 
 ## Authors
 
 * **John Damask** 
-* Library authors (below)
 
 
 ## Acknowledgments

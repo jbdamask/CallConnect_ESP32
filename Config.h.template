@@ -15,6 +15,9 @@ const long LONG_PRESS_DURATION = 5000; // Used for long button push to restart t
 #define PIN_STATE     27    // Button pin for changing state
 #define PIN_NEOPIXEL   12    // pin connected to the small NeoPixels strip
 
+// NeoPixels
+#define BRIGHTNESS      255 // Max brightness of NeoPixels
+
 // JSON buffer
 #define JSON_BUFFER_SIZE  512
 

@@ -3,7 +3,7 @@
  * Description: Uses a button to change NeoPixel animation and publish a message. Receives messages via MQTT. 
  * Author: John B Damask
  * Date: January 30, 2019
- * Notes: Good first pass. Consider porting to aws sdk and FreeRTOS.
+ * Notes: For full context, see Instructables.com project called Web-Connected Glow Pillows
  */
 
 #include "WiFiManager.h" // https://github.com/tzapu/WiFiManager
